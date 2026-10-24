@@ -19,5 +19,7 @@ jobs:
         run: bash Scripts/package_app.sh release
       - name: Run core checks
         run: FrameNest.app/Contents/MacOS/FrameNest --self-test
+      - name: Run MCP protocol checks
+        run: python3 Scripts/test_mcp.py
       - name: Verify app signature
         run: codesign --verify --deep --strict FrameNest.app

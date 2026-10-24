@@ -1,3 +1,4 @@
+import FrameNestCore
 import Foundation
 
 func runSelfTests() throws {

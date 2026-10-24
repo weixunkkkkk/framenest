@@ -1,3 +1,4 @@
+import FrameNestCore
 import SwiftUI
 import AppKit
 
@@ -102,7 +103,7 @@ struct Sidebar: View {
             }.font(.caption).foregroundStyle(.secondary)
             Divider()
             Label("原素材保留", systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary)
-            Text("1.2.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
+            Text("1.3.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
         }.padding(18).background(Palette.accent.opacity(0.045)).disabled(model.busy)
     }
     private func nav(_ title: String, icon: String, tag: Int) -> some View {

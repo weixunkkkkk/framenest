@@ -1,3 +1,4 @@
+import FrameNestCore
 import SwiftUI
 import AppKit
 import Observation

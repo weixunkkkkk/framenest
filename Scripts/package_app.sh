@@ -127,6 +127,7 @@ install_binary() {
 }
 
 install_binary "$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
+install_binary "FrameNestMCP" "$APP/Contents/MacOS/FrameNestMCP"
 
 # Bundle app resources (if any).
 APP_RESOURCES_DIR="$ROOT/Sources/$APP_NAME/Resources"
@@ -205,6 +206,7 @@ sign_frameworks() {
 }
 sign_frameworks
 
+codesign "${CODESIGN_ARGS[@]}" "$APP/Contents/MacOS/FrameNestMCP"
 codesign "${CODESIGN_ARGS[@]}" \
   --entitlements "$APP_ENTITLEMENTS" \
   "$APP"

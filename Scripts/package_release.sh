@@ -5,6 +5,7 @@ cd "$ROOT"
 source version.env
 bash Scripts/package_app.sh release
 "$ROOT/$APP_NAME.app/Contents/MacOS/$APP_NAME" --self-test
+python3 Scripts/test_mcp.py
 codesign --verify --deep --strict "$ROOT/$APP_NAME.app"
 ARCH=$(uname -m)
 mkdir -p dist

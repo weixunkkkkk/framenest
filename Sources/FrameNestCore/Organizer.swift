@@ -1,24 +1,38 @@
 import Foundation
 
-struct OrganizeItem: Identifiable {
-    let id = UUID()
-    let source: URL
-    let relative: String
-    var category: String
-    var reason: String
-    var selected = true
-    var wholeDirectory = false
-    var typeInfo: (label: String, icon: String) { Organizer.fileType(source.pathExtension, directory: wholeDirectory) }
+public struct OrganizeItem: Identifiable {
+    public let id = UUID()
+    public let source: URL
+    public let relative: String
+    public var category: String
+    public var reason: String
+    public var selected: Bool
+    public var wholeDirectory: Bool
+    public var typeInfo: (label: String, icon: String) { Organizer.fileType(source.pathExtension, directory: wholeDirectory) }
+    public init(source: URL, relative: String, category: String, reason: String, selected: Bool = true, wholeDirectory: Bool = false) {
+        self.source = source; self.relative = relative; self.category = category
+        self.reason = reason; self.selected = selected; self.wholeDirectory = wholeDirectory
+    }
 }
 
-enum HelperError: LocalizedError {
+public struct OrganizationResult {
+    public let copied: Int
+    public let skipped: Int
+    public let failed: Int
+    public let reportURL: URL
+    public var summary: String {
+        "完成：复制 \(copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。\n归类记录已保存在「08_交付与发布/整理记录」。"
+    }
+}
+
+public enum HelperError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case .message(let s) = self { return s }; return nil }
+    public var errorDescription: String? { if case .message(let s) = self { return s }; return nil }
 }
 
-enum Organizer {
-    static let fm = FileManager.default
-    static let categories = [
+public enum Organizer {
+    public static let fm = FileManager.default
+    public static let categories = [
         "01_文稿与资料/口播与分镜", "01_文稿与资料/产品资料", "01_文稿与资料/实测数据",
         "02_原始素材/口播", "02_原始素材/产品实拍", "02_原始素材/屏幕录制",
         "03_音频/配音与现场声", "03_音频/BGM", "03_音频/音效",
@@ -27,13 +41,13 @@ enum Organizer {
         "08_交付与发布/发布文案", "08_交付与发布/交付记录", "09_待确认",
         "06_工程/产品模型与PCB", "06_工程/字体与设计素材", "06_工程/脚本与工具"
     ]
-    static let defaultFolders = categories.sorted().joined(separator: "\n")
-    static func fail(_ s: String) throws -> Never { throw HelperError.message(s) }
-    static func safeRelative(_ s: String) -> Bool {
+    public static let defaultFolders = categories.sorted().joined(separator: "\n")
+    public static func fail(_ s: String) throws -> Never { throw HelperError.message(s) }
+    public static func safeRelative(_ s: String) -> Bool {
         !s.isEmpty && !s.hasPrefix("/") && !s.contains("\\") && !s.contains(":") && !s.contains("\0") &&
         s.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
     }
-    static func createProject(parent: URL, name: String, folders: String) throws -> URL {
+    public static func createProject(parent: URL, name: String, folders: String) throws -> URL {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard safeRelative(clean), !clean.contains("/"), !clean.hasPrefix(".") else { try fail("项目名不能留空，也不能包含 /、\\、: 或 .. 路径。") }
         let paths = folders.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -47,21 +61,21 @@ enum Organizer {
         try note.write(to: root.appendingPathComponent("项目说明.md"), atomically: true, encoding: .utf8)
         return root
     }
-    static let videos: Set<String> = ["mp4", "mov", "mkv", "mxf", "avi", "webm", "mts", "m2ts", "r3d", "braw", "m4v", "insv", "360"]
-    static let audios: Set<String> = ["wav", "mp3", "m4a", "aac", "aiff", "aif", "flac", "ogg", "opus", "wma"]
-    static let images: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "gif", "svg", "avif", "exr", "dpx"]
-    static let rawPhotos: Set<String> = ["dng", "cr2", "cr3", "arw", "nef", "raf", "rw2", "orf"]
-    static let docs: Set<String> = ["md", "txt", "pdf", "doc", "docx", "pages", "ppt", "pptx", "key", "rtf", "html"]
-    static let code: Set<String> = ["py", "js", "mjs", "cjs", "jsx", "tsx", "ts", "css", "sh", "swift", "html"]
-    static let data: Set<String> = ["csv", "tsv", "xlsx", "xls", "numbers", "parquet", "feather", "arrow"]
-    static let models: Set<String> = ["glb", "gltf", "fbx", "obj", "stl", "step", "stp", "iges", "igs", "usd", "usdz", "epro", "epro2", "kicad_pro", "kicad_pcb", "kicad_sch", "schdoc", "pcbdoc", "gerber"]
-    static let animationProjects: Set<String> = ["aep", "aepx", "blend", "blend1", "c4d", "hip", "hipnc", "motn"]
-    static let editProjects: Set<String> = ["prproj", "drp", "dra", "fcpxml", "fcpbundle", "chatcutproject", "veg", "edl"]
-    static let fonts: Set<String> = ["ttf", "otf", "woff", "woff2", "ttc"]
-    static let design: Set<String> = ["psd", "psb", "ai", "afdesign", "afphoto", "sketch", "fig", "xd"]
-    static let subtitles: Set<String> = ["srt", "ass", "ssa", "vtt", "sbv", "lrc"]
-    static let archives: Set<String> = ["zip", "7z", "rar", "tar", "gz"]
-    static func fileType(_ ext: String, directory: Bool = false) -> (label: String, icon: String) {
+    public static let videos: Set<String> = ["mp4", "mov", "mkv", "mxf", "avi", "webm", "mts", "m2ts", "r3d", "braw", "m4v", "insv", "360"]
+    public static let audios: Set<String> = ["wav", "mp3", "m4a", "aac", "aiff", "aif", "flac", "ogg", "opus", "wma"]
+    public static let images: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "gif", "svg", "avif", "exr", "dpx"]
+    public static let rawPhotos: Set<String> = ["dng", "cr2", "cr3", "arw", "nef", "raf", "rw2", "orf"]
+    public static let docs: Set<String> = ["md", "txt", "pdf", "doc", "docx", "pages", "ppt", "pptx", "key", "rtf", "html"]
+    public static let code: Set<String> = ["py", "js", "mjs", "cjs", "jsx", "tsx", "ts", "css", "sh", "swift", "html"]
+    public static let data: Set<String> = ["csv", "tsv", "xlsx", "xls", "numbers", "parquet", "feather", "arrow"]
+    public static let models: Set<String> = ["glb", "gltf", "fbx", "obj", "stl", "step", "stp", "iges", "igs", "usd", "usdz", "epro", "epro2", "kicad_pro", "kicad_pcb", "kicad_sch", "schdoc", "pcbdoc", "gerber"]
+    public static let animationProjects: Set<String> = ["aep", "aepx", "blend", "blend1", "c4d", "hip", "hipnc", "motn"]
+    public static let editProjects: Set<String> = ["prproj", "drp", "dra", "fcpxml", "fcpbundle", "chatcutproject", "veg", "edl"]
+    public static let fonts: Set<String> = ["ttf", "otf", "woff", "woff2", "ttc"]
+    public static let design: Set<String> = ["psd", "psb", "ai", "afdesign", "afphoto", "sketch", "fig", "xd"]
+    public static let subtitles: Set<String> = ["srt", "ass", "ssa", "vtt", "sbv", "lrc"]
+    public static let archives: Set<String> = ["zip", "7z", "rar", "tar", "gz"]
+    public static func fileType(_ ext: String, directory: Bool = false) -> (label: String, icon: String) {
         let ext = ext.lowercased()
         if directory { return ("完整目录 / 文件包", "folder.fill") }
         if videos.contains(ext) { return ("视频 · \(ext.uppercased())", "film") }
@@ -78,7 +92,7 @@ enum Organizer {
         if docs.contains(ext) { return ("文档 · \(ext.uppercased())", "doc.text") }
         return (ext.isEmpty ? "未知类型" : ext.uppercased(), "doc")
     }
-    static func classify(_ relative: String, directory: Bool = false) -> (String, String) {
+    public static func classify(_ relative: String, directory: Bool = false) -> (String, String) {
         let parts = relative.lowercased().split(separator: "/").map(String.init)
         let leaf = parts.last ?? relative.lowercased()
         let ext = (leaf as NSString).pathExtension
@@ -143,7 +157,7 @@ enum Organizer {
         if ["parquet", "feather", "arrow"].contains(ext) { return (categories[2], "列式数据文件") }
         return (categories[19], "用途不明确，需确认")
     }
-    static func projectCategory(_ url: URL) -> String? {
+    public static func projectCategory(_ url: URL) -> String? {
         let names = (try? fm.contentsOfDirectory(atPath: url.path)) ?? []
         let lower = names.map { $0.lowercased() }
         let ext = url.pathExtension.lowercased()
@@ -161,7 +175,7 @@ enum Organizer {
         }
         return nil
     }
-    static func scan(_ source: URL, destination: URL) throws -> [OrganizeItem] {
+    public static func scan(_ source: URL, destination: URL) throws -> [OrganizeItem] {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let src = source.path
         let dst = destination.resolvingSymlinksInPath().standardizedFileURL.path
@@ -192,7 +206,7 @@ enum Organizer {
         if let e = scanError { throw e }
         return items.sorted { $0.relative.localizedStandardCompare($1.relative) == .orderedAscending }
     }
-    static func ensureInside(_ url: URL, root: URL) throws {
+    public static func ensureInside(_ url: URL, root: URL) throws {
         var ancestor = url.standardizedFileURL
         var missing: [String] = []
         while !fm.fileExists(atPath: ancestor.path), ancestor.path != "/" {
@@ -208,7 +222,10 @@ enum Organizer {
         let base = root.resolvingSymlinksInPath().standardizedFileURL.path
         guard target.hasPrefix(base + "/") else { try fail("目标目录包含指向项目外的链接，请换一个目标项目。") }
     }
-    static func execute(_ items: [OrganizeItem], destination: URL, progress: (String) -> Void) throws -> String {
+    public static func execute(_ items: [OrganizeItem], destination: URL, progress: (String) -> Void) throws -> String {
+        try executeDetailed(items, destination: destination, progress: progress).summary
+    }
+    public static func executeDetailed(_ items: [OrganizeItem], destination: URL, progress: (String) -> Void) throws -> OrganizationResult {
         var copied = 0, skipped = 0, failed = 0
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let logs = destination.appendingPathComponent("08_交付与发布/整理记录", isDirectory: true)
@@ -246,6 +263,6 @@ enum Organizer {
         let summary = "完成：复制 \(copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。"
         lines.append("\n" + summary)
         try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
-        return summary + "\n归类记录已保存在「08_交付与发布/整理记录」。"
+        return OrganizationResult(copied: copied, skipped: skipped, failed: failed, reportURL: report)
     }
 }

@@ -77,6 +77,16 @@
 
 复制时保留原文件名与原子目录。来源和目标不能相同或互相包含；散落的隐藏项、缓存、应用包与符号链接会跳过。识别为完整工程的目录整体复制，内部资源也一起保留。
 
+## 接入 Codex / MCP
+
+1.3 版内置独立的本地 MCP 程序，与图形版共享分类和复制逻辑。Codex 可以读取模板、创建项目、预览归类计划、调整分类并执行复制。MCP 操作不需要打开图形窗口。
+
+```bash
+codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP
+```
+
+需要 FrameNest 1.3 或更新版本。先预览、再按计划复制；来源变化时需要重新预览。详细配置、工具列表和示例见 [MCP 接入说明](docs/mcp.md)。
+
 ## 从源码构建
 
 使用 Xcode Command Line Tools 中的 Swift，项目无第三方包依赖。
@@ -86,6 +96,7 @@ git clone https://github.com/weixunkkkkk/framenest.git
 cd framenest
 bash Scripts/package_app.sh release
 FrameNest.app/Contents/MacOS/FrameNest --self-test
+python3 Scripts/test_mcp.py
 ```
 
 构建输出为仓库根目录的 `FrameNest.app`。打包脚本会生成多尺寸图标并进行 ad-hoc 签名。
@@ -98,11 +109,11 @@ swift build -c release
 bash Scripts/package_release.sh
 ```
 
-核心自检覆盖分类优先级、工程完整复制、原文件保留、重复跳过、同名保护及路径边界。源码通过本机架构构建；当前发布的预编译包不包含 Intel 版本。
+Python 3 仅用于 MCP 开发测试；运行应用和 MCP 不依赖 Python。核心自检覆盖分类优先级、工程完整复制、原文件保留、重复跳过、同名保护及路径边界。源码通过本机架构构建；当前发布的预编译包不包含 Intel 版本。
 
 ## 贡献与许可
 
-欢迎提交 Issue 或 Pull Request，补充新的素材类型、分类案例和工作流模板。分类规则位于 `Sources/FrameNest/Organizer.swift`，图形界面位于 `Interface.swift`。
+欢迎提交 Issue 或 Pull Request，补充新的素材类型、分类案例和工作流模板。分类规则位于 `Sources/FrameNestCore/Organizer.swift`，图形界面位于 `Interface.swift`。
 
 项目使用 [MIT License](LICENSE)。应用图标由 AI 辅助生成，与项目源码一同提供。
 
@@ -160,6 +171,16 @@ Specific file names take priority over generic parent-folder hints. For example,
 
 Source and destination folders must not overlap. Loose hidden files, caches, application bundles, and symbolic links are skipped. Recognized project folders are copied as complete units, including their internal resources.
 
+### Codex and MCP
+
+FrameNest 1.3 includes a native stdio MCP server sharing the GUI engine. Codex can read templates, create projects, preview copy plans, override categories, and copy selected files without opening the GUI.
+
+```bash
+codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP
+```
+
+Install version 1.3 or newer. Preview before execution; changed source snapshots require a new plan. See the bilingual [MCP guide](docs/mcp.md) for configuration and tool examples.
+
 ### Build from source
 
 Install Xcode Command Line Tools. No third-party Swift packages are required.
@@ -169,14 +190,15 @@ git clone https://github.com/weixunkkkkk/framenest.git
 cd framenest
 bash Scripts/package_app.sh release
 FrameNest.app/Contents/MacOS/FrameNest --self-test
+python3 Scripts/test_mcp.py
 ```
 
 The build produces `FrameNest.app` in the repository root, including icon resources and an ad-hoc signature. Use `bash Scripts/package_release.sh` to create a versioned ZIP and SHA-256 file. Source builds use the host Mac's architecture; no Intel prebuilt download is currently provided.
 
-Self-checks cover classification precedence, complete project copying, source preservation, duplicate detection, same-name handling, and path boundaries.
+Python 3 is only needed for the MCP development checks, not to run the app or server. Self-checks cover classification precedence, complete project copying, source preservation, duplicate detection, same-name handling, and path boundaries.
 
 ### Contributing and license
 
-Issues and pull requests are welcome, especially new media formats, classification examples, and workflow templates. Rules live in `Sources/FrameNest/Organizer.swift`; the visual interface lives in `Interface.swift`.
+Issues and pull requests are welcome, especially new media formats, classification examples, and workflow templates. Rules live in `Sources/FrameNestCore/Organizer.swift`; the visual interface lives in `Interface.swift`.
 
 Released under the [MIT License](LICENSE). The application icon was created with AI assistance and is included with the source.
