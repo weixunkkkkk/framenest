@@ -8,6 +8,7 @@ public struct OrganizeItem: Identifiable {
     public var reason: String
     public var selected: Bool
     public var wholeDirectory: Bool
+    public var visualAnalysis: VisualAnalysis?
     public var typeInfo: (label: String, icon: String) { Organizer.fileType(source.pathExtension, directory: wholeDirectory) }
     public init(source: URL, relative: String, category: String, reason: String, selected: Bool = true, wholeDirectory: Bool = false) {
         self.source = source; self.relative = relative; self.category = category
@@ -184,7 +185,7 @@ public enum Organizer {
         }
         return nil
     }
-    public static func scan(_ source: URL, destination: URL) throws -> [OrganizeItem] {
+    public static func scan(_ source: URL, destination: URL, analyzeContents: Bool = false, progress: (String) -> Void = { _ in }) throws -> [OrganizeItem] {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let src = source.path
         let dst = destination.resolvingSymlinksInPath().standardizedFileURL.path
@@ -216,7 +217,8 @@ public enum Organizer {
             items.append(.init(source: url, relative: relative, category: c.0, reason: c.1))
         }
         if let e = scanError { throw e }
-        return items.sorted { $0.relative.localizedStandardCompare($1.relative) == .orderedAscending }
+        let sorted = items.sorted { $0.relative.localizedStandardCompare($1.relative) == .orderedAscending }
+        return analyzeContents ? VisualClassifier.refine(sorted, progress: progress) : sorted
     }
     public static func ensureInside(_ url: URL, root: URL) throws {
         var ancestor = url.standardizedFileURL
@@ -276,7 +278,7 @@ public enum Organizer {
                     try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                     if mode == .move { try fm.moveItem(at: item.source, to: target); moved += 1 }
                     else { try fm.copyItem(at: item.source, to: target); copied += 1 }
-                    lines.append("- 已\(mode.title)：`\(item.source.path)` → `\(target.path)`")
+                    lines.append("- 已\(mode.title)：`\(item.source.path)` → `\(target.path)`；依据：\(item.reason)")
                 }
             } catch { failed += 1; lines.append("- 失败：`\(item.source.path)`；\(error.localizedDescription)") }
             try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)

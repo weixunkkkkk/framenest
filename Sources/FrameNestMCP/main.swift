@@ -36,7 +36,7 @@ final class MCPServer {
     var protocolVersion = versions[0]
     var plans: [String: OrganizationPlan] = [:]
     let fm = FileManager.default
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.4.0"
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.5.0"
 
     static func json(_ object: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
@@ -142,9 +142,13 @@ final class MCPServer {
         tool("classify_files", "判断文件分类", "Classify file names or relative paths without reading file contents. Returns suggested category, type and reason. Ambiguous items remain in 09_待确认.", schema([
             "paths": ["type": "array", "items": ["type": "string"], "minItems": 1, "maxItems": 200]
         ], required: ["paths"])),
+        tool("analyze_media", "识别视频与图片画面", "Analyze local image contents or sample multiple video frames with Apple Vision on this Mac. Returns suggested category, evidence, object labels and frame times. No uploads. Stable portrait shots suggest talking-head footage; they do not prove speech. Mixed or unclear scenes remain for review. Absolute file paths are required.", schema([
+            "paths": ["type": "array", "items": ["type": "string"], "minItems": 1, "maxItems": 20]
+        ], required: ["paths"])),
         tool("preview_organize", "预览素材归类", "Scan a source folder and create a one-hour in-memory copy or move plan. Copy is the default; move relocates source items. The project inbox 00_待归类 is also supported. Preview does not write to the destination. Returns a plan_id, category totals and a bounded first page.", schema([
             "source_path": ["type": "string"], "destination_path": ["type": "string"],
             "mode": ["type": "string", "enum": ["copy", "move"], "default": "copy"],
+            "analyze_contents": ["type": "boolean", "default": true, "description": "Analyze uncertain images and videos locally; explicit filename classifications are preserved."],
             "limit": ["type": "integer", "minimum": 1, "maximum": 200, "default": 50]
         ], required: ["source_path", "destination_path"])),
         tool("get_plan", "查看归类计划", "Read a page from an existing plan. Plans belong to this server process and expire after one hour. Does not rescan or change files.", schema([
@@ -223,10 +227,12 @@ final class MCPServer {
         return value
     }
     func itemJSON(_ item: OrganizeItem, destination: URL) -> [String: Any] {
-        ["relative_path": item.relative, "category": item.category, "reason": item.reason,
+        var result: [String: Any] = ["relative_path": item.relative, "category": item.category, "reason": item.reason,
          "file_type": item.typeInfo.label, "whole_directory": item.wholeDirectory,
          "needs_review": item.category == "09_待确认",
          "destination_path": destination.appendingPathComponent(item.category).appendingPathComponent(item.relative).path]
+        if let analysis = item.visualAnalysis { result["visual_analysis"] = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(analysis)) }
+        return result
     }
     func page(_ value: OrganizationPlan, offset: Int, limit: Int) -> [String: Any] {
         let end = min(value.items.count, offset + limit)
@@ -247,7 +253,8 @@ final class MCPServer {
         case "get_template":
             return ["name": "FrameNest", "version": version, "folders": currentTemplate().components(separatedBy: .newlines).filter { !$0.isEmpty },
                     "default_folders": Organizer.defaultFolders.components(separatedBy: .newlines), "categories": Organizer.categories.sorted(),
-                    "copy_mode": "copy", "supported_modes": OrganizationMode.allCases.map(\.rawValue), "inbox_folder": Organizer.inboxFolder, "plan_ttl_seconds": Int(Self.ttl)]
+                    "copy_mode": "copy", "supported_modes": OrganizationMode.allCases.map(\.rawValue), "inbox_folder": Organizer.inboxFolder,
+                    "visual_engine": "Apple Vision (on-device)", "analyze_contents_default": true, "plan_ttl_seconds": Int(Self.ttl)]
         case "create_project":
             let parent = try directory(string(args, "parent_path"))
             var projectName = try string(args, "name")
@@ -272,6 +279,26 @@ final class MCPServer {
                         "file_type": Organizer.fileType((path as NSString).pathExtension).label, "needs_review": category.0 == "09_待确认"]
             }
             return ["items": values]
+        case "analyze_media":
+            guard let paths = args["paths"] as? [String], !paths.isEmpty, paths.count <= 20 else {
+                throw HelperError.message("paths must contain 1 to 20 absolute image/video file paths.")
+            }
+            let files: [URL] = try paths.map { path in
+                let expanded = (path as NSString).expandingTildeInPath
+                guard expanded.hasPrefix("/"), !expanded.contains("\0") else { throw HelperError.message("Use absolute file paths or ~/ paths.") }
+                let file = URL(fileURLWithPath: expanded).resolvingSymlinksInPath()
+                guard try file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else { throw HelperError.message("Not a regular file: \(path)") }
+                return file
+            }
+            let values = try files.enumerated().map { index, file -> [String: Any] in
+                let result = VisualClassifier.analyze(file)
+                if let token = progressToken, token is String || token is NSNumber {
+                    send(["jsonrpc": "2.0", "method": "notifications/progress", "params": ["progressToken": token, "progress": index + 1, "total": files.count, "message": "已识别：" + file.lastPathComponent]])
+                }
+                return ["path": file.path, "category": result.category ?? "09_待确认", "reason": result.reason,
+                        "needs_review": result.category == nil, "visual_analysis": try JSONSerialization.jsonObject(with: JSONEncoder().encode(result))]
+            }
+            return ["items": values]
         case "preview_organize":
             let source = try directory(string(args, "source_path"))
             let destination = try directory(string(args, "destination_path"))
@@ -280,9 +307,20 @@ final class MCPServer {
             if args["mode"] == nil { mode = .copy }
             else if let raw = args["mode"] as? String, let parsed = OrganizationMode(rawValue: raw) { mode = parsed }
             else { throw HelperError.message("mode must be copy or move.") }
+            var analyze = true
+            if let raw = args["analyze_contents"] {
+                guard let bool = raw as? NSNumber, CFGetTypeID(bool) == CFBooleanGetTypeID() else { throw HelperError.message("analyze_contents must be a boolean.") }
+                analyze = bool.boolValue
+            }
             plans = plans.filter { Date().timeIntervalSince($0.value.created) < Self.ttl }
             guard plans.count < 32 else { throw HelperError.message("Too many active plans. Restart this MCP server or wait for plans to expire.") }
-            let items = try Organizer.scan(source, destination: destination)
+            var count = 0
+            let items = try Organizer.scan(source, destination: destination, analyzeContents: analyze) { message in
+                count += 1
+                if let token = progressToken, token is String || token is NSNumber {
+                    self.send(["jsonrpc": "2.0", "method": "notifications/progress", "params": ["progressToken": token, "progress": count, "message": message]])
+                }
+            }
             let value = try OrganizationPlan(source: source, destination: destination, items: items, mode: mode)
             plans[value.id] = value
             return page(value, offset: 0, limit: limit)
@@ -338,7 +376,7 @@ final class MCPServer {
 }
 
 if CommandLine.arguments.contains("--version") {
-    print("FrameNestMCP 1.4.0")
+    print("FrameNestMCP 1.5.0")
 } else {
     MCPServer().run()
 }

@@ -132,5 +132,6 @@ func runSelfTests() throws {
     let unsafeMove = try Organizer.executeDetailed(unsafePlan, destination: project, mode: .move) { _ in }
     try check(unsafeMove.failed == 1 && fm.fileExists(atPath: incoming.path), "拒绝移动到来源自身且保留文件")
     try check((try String(contentsOf: moved.reportURL, encoding: .utf8)).contains("已移动"), "移动结果写入 Markdown 记录")
+    try runVisualSelfTests(base: base, check: check)
     print("ALL \(checks) CHECKS PASSED")
 }

@@ -10,19 +10,22 @@
 
 [English ↓](#english) · [下载 / Downloads](https://github.com/weixunkkkkk/framenest/releases) · [MIT License](LICENSE)
 
-![FrameNest 一键归类实际界面](docs/screenshots/organize.png)
+![FrameNest 一键归类实际界面](docs/screenshots/organize-1.5.png)
+
+[新建项目页](docs/screenshots/new-project-1.5.png) · [分类规则页](docs/screenshots/rules-1.5.png)
 
 ## 能做什么
 
 - **一键新建项目**：项目名、日期后缀、保存位置和目录模板可配置。
 - **图形目录预览**：分类图标和子目录一目了然，模板支持编辑与保存。
 - **一键自动归类**：创建项目后自动进入归类页；素材放进“00_待归类”，或拖入外部素材文件夹，即可一键扫描并整理。
+- **本地画面识别**：默认开启。名称无法判断用途的视频会抽取多个时间点，图片直接分析，给出口播、数码产品实拍、录屏、产品图、截图与封面建议；依据不足时放待确认。
 - **可选预览**：显示文件类型、建议分类和判断依据，支持搜索、待确认筛选及逐项调整。
 - **移动 / 复制可选**：界面默认移动素材，复制模式保留来源。内容相同则跳过并保留来源，同名不同内容自动加序号。
 - **保留工程结构**：识别剪映、ChatCut、PR、达芬奇、HyperFrames、Remotion 等工程标识，整体移动或复制目录。
 - **本地处理**：无需账号、网络或外部 AI 服务。整理过程生成 Markdown 记录。
 
-分类使用文件名、最近的父目录和文件格式，不会分析视频画面。用途不明确的文件进入“待确认”，可以在预览中调整，也可以整理后再确认。
+名称、最近的父目录和文件格式优先；名称无法判断用途的视频和图片默认使用 macOS 的 Apple Vision 在本机分析画面，无需 API Key，也不上传素材。人像近景只是口播建议，不证明有人在说话；混合或不明确的画面仍进入“待确认”。可关闭“识别画面内容”恢复只按名称整理。详见[画面识别说明](docs/visual-recognition.md)。
 
 ## 安装与使用
 
@@ -76,13 +79,13 @@
 - `BGM/啸叫原声.wav` → `03_音频/配音与现场声`。
 - `KM003C_烤机60W.parquet` → `01_文稿与资料/实测数据`。
 - `外壳.step` → `06_工程/产品模型与PCB`。
-- `C0001.mp4`、用途不明的 PDF 和表格 → `09_待确认`。
+- `C0001.mp4`、`IMG_0001.png` 等默认命名素材 → 分析实际画面，再建议分类；用途不明的画面、PDF 和表格 → `09_待确认`。
 
 归类时保留原文件名与原子目录。支持项目内部的“00_待归类”作为来源；其他来源与目标不能相同或互相包含。散落的隐藏项、缓存、应用包与符号链接会跳过。识别为完整工程的目录整体移动或复制，内部资源也一起保留。
 
 ## 接入 Codex / MCP
 
-1.3 起内置独立的本地 MCP 程序，与图形版共享整理逻辑。1.4 增加项目内部待归类入口和移动模式。Codex 可以读取模板、创建项目、预览归类计划、调整分类并执行移动或复制。MCP 操作不需要打开图形窗口。
+1.3 起内置独立的本地 MCP 程序，与图形版共享整理逻辑。1.4 增加项目内部待归类入口和移动模式，1.5 增加本地画面识别与 `analyze_media`。Codex 可以读取模板、创建项目、预览归类计划、调整分类并执行移动或复制。MCP 操作不需要打开图形窗口。
 
 ```bash
 codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP
@@ -133,12 +136,13 @@ Create a project structure, put media in its `00_待归类` inbox, and organize 
 - **Create projects in one step:** configure the project name, date suffix, destination, and folder template.
 - **Visual folder preview:** inspect category icons and subfolders, then edit and save your template.
 - **One-click organization:** use the project inbox or drag in an external media folder. The app scans and organizes in one operation.
+- **On-device visual recognition:** uncertain video names trigger multi-frame analysis; images are analyzed directly. Suggested categories include talking-head footage, consumer-electronics shots, screen recordings, product images, screenshots, and covers. Mixed or unclear scenes remain for review.
 - **Optional preview:** see file types, suggested destinations, and classification reasons; search, filter uncertain items, and override categories.
 - **Move or copy:** the GUI defaults to moving files; copy mode keeps source files. Original names and relative subfolders are retained. Identical items are skipped and left in the source in both modes; different contents with the same name receive a suffix.
 - **Keep recognized projects intact:** supported project markers include Jianying/CapCut, ChatCut, Premiere Pro, DaVinci Resolve, HyperFrames, and Remotion.
 - **Work locally:** no account, network connection, or external AI service is required. Each operation creates a Markdown report.
 
-Classification uses names, nearby parent folders, and file formats. It does not analyze video content. Ambiguous files go to a review category for manual confirmation.
+Explicit names, nearby parent folders, and formats take priority. Version 1.5 analyzes uncertain video/image contents with Apple Vision on this Mac, without API keys or uploads. The GUI toggle disables content analysis if desired. Stable portrait framing only suggests a talking-head shot; it does not prove speech. Mixed or ambiguous scenes remain for review. See the bilingual [visual recognition guide](docs/visual-recognition.md).
 
 ### Requirements and installation
 
@@ -171,13 +175,13 @@ The default template separates scripts and reference documents, footage, audio, 
 | Editing and animation projects | PRPROJ, DRP, FCPXML, ChatCut, Jianying drafts, BLEND, AEP, HyperFrames, Remotion |
 | Scripts and tools | Python, JavaScript, TypeScript, Shell, Swift |
 
-Specific file names take priority over generic parent-folder hints. For example, a review export inside a talking-head folder remains a preview export, and a recording of equipment noise inside a BGM folder remains source audio. Unknown PDFs, spreadsheets, and camera-numbered clips are left for review.
+Specific file names take priority over generic parent-folder hints. For example, a review export inside a talking-head folder remains a preview export, and a recording of equipment noise inside a BGM folder remains source audio. Uncertain camera-numbered clips and images are analyzed locally; unclear visual results, unknown PDFs, and spreadsheets remain for review.
 
 The project inbox `00_待归类` is supported as a source. Other source and destination folders must not overlap. Loose hidden files, caches, application bundles, and symbolic links are skipped. Recognized project folders are moved or copied as complete units, including their internal resources.
 
 ### Codex and MCP
 
-FrameNest 1.3 introduced a native stdio MCP server sharing the GUI engine. Version 1.4 adds move plans and the project inbox. Codex can read templates, create projects, preview plans, override categories, and move or copy selected files without opening the GUI.
+FrameNest 1.3 introduced a native stdio MCP server sharing the GUI engine. Version 1.4 adds move plans and the project inbox. Version 1.5 adds on-device visual analysis and the `analyze_media` tool. Codex can read templates, create projects, preview plans, override categories, and move or copy selected files without opening the GUI.
 
 ```bash
 codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP

@@ -8,6 +8,7 @@ enum Palette {
     static let card = Color(nsColor: .controlBackgroundColor)
     static func icon(_ path: String) -> String {
         switch String(path.prefix(2)) {
+        case "00": return "tray.and.arrow.down"
         case "01": return "doc.text"
         case "02": return "video"
         case "03": return "waveform"
@@ -57,7 +58,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             Sidebar(model: model).frame(width: 202)
             Divider()
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 22) {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(["新建项目", "素材归类", "分类规则"][model.tab]).font(.system(size: 27, weight: .bold))
@@ -72,9 +73,12 @@ struct ContentView: View {
                     case 1: ImportView(model: model)
                     default: RulesView()
                     }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.frame(maxWidth: .infinity, maxHeight: 760)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 StatusBar(model: model)
-            }.padding(24).frame(minWidth: 800).background(Palette.canvas)
+            }.padding(.horizontal, 32).padding(.vertical, 28)
+                .frame(minWidth: 800, maxWidth: 1140, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center).background(Palette.canvas)
         }.tint(Palette.accent).frame(minWidth: 1050, minHeight: 740)
     }
 }
@@ -103,7 +107,7 @@ struct Sidebar: View {
             }.font(.caption).foregroundStyle(.secondary)
             Divider()
             Label("移动 / 复制可选", systemImage: "folder.badge.gearshape").font(.caption).foregroundStyle(.secondary)
-            Text("1.4.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
+            Text("1.5.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
         }.padding(18).background(Palette.accent.opacity(0.045)).disabled(model.busy)
     }
     private func nav(_ title: String, icon: String, tag: Int) -> some View {
@@ -259,6 +263,8 @@ struct ImportView: View {
             HStack {
                 Button { model.scan() } label: { Label("扫描并预览", systemImage: "magnifyingglass") }
                     .disabled(model.source == nil || model.destination == nil)
+                Toggle("识别画面内容", isOn: $model.analyzeContents).toggleStyle(.checkbox)
+                    .help("对名称和目录无法判断用途的视频与图片进行本地画面识别，不上传素材。")
                 Spacer()
                 Picker("归类方式", selection: $model.mode) {
                     Text("移动素材").tag(OrganizationMode.move)
@@ -335,7 +341,10 @@ struct AssetRow: View {
                     Text(item.relative).font(.callout.weight(.medium)).lineLimit(2).textSelection(.enabled)
                     HStack(spacing: 8) {
                         Text(item.typeInfo.label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 3).background(Palette.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 4))
-                        Text(item.reason).font(.caption).foregroundStyle(item.category == "09_待确认" ? .orange : .secondary).lineLimit(1)
+                        if let analysis = item.visualAnalysis, analysis.framesAnalyzed > 0 {
+                            Label("画面 · \(analysis.framesAnalyzed) 帧", systemImage: "eye").font(.caption2).foregroundStyle(Palette.accent)
+                        }
+                        Text(item.reason).font(.caption).foregroundStyle(item.category == "09_待确认" ? .orange : .secondary).lineLimit(2)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 Picker("归类位置", selection: Binding(get: { item.category }, set: { value in
@@ -372,20 +381,24 @@ struct RulesView: View {
         ("waveform", "配乐与证据音", "BGM、音效、人声与现场录音分开。啸叫、底噪采样、原声优先保留为证据音。"),
         ("cube.transparent", "动画、模型与 PCB", "Blender、AE、HyperFrames 与产品模型分开。补齐 STEP、GLB、STL、EasyEDA、KiCad 和字体格式。"),
         ("folder.fill", "完整工程保留", "识别 HyperFrames、Remotion、剪映、ChatCut、PR、达芬奇等工程标识，整个目录移动或复制，保留内部相对引用。"),
-        ("questionmark.circle", "用途不清楚时", "先看文件名，再看最近的原目录。无用途依据的 PDF、表格和相机编号视频放待确认，可在预览中修改。")
+        ("eye", "本地画面识别", "相机默认命名的视频抽取多个时间点，图片直接识别。结合物体、文字与人像构图，建议口播、产品实拍、录屏、截图或封面；依据不足时放待确认。")
     ]
     var body: some View {
-        ScrollView {
+        GeometryReader { geometry in
+          ScrollView {
             VStack(spacing: 12) {
+              LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
                 ForEach(rules, id: \.1) { rule in
-                    HStack(alignment: .top, spacing: 15) {
+                    HStack(alignment: .center, spacing: 15) {
                         Image(systemName: rule.0).font(.title2).foregroundStyle(Palette.accent).frame(width: 32)
                         VStack(alignment: .leading, spacing: 7) { Text(rule.1).font(.headline); Text(rule.2).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                         Spacer(minLength: 0)
-                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading).background(Palette.card, in: RoundedRectangle(cornerRadius: 12))
+                    }.padding(18).frame(maxWidth: .infinity, minHeight: 132, alignment: .leading).background(Palette.card, in: RoundedRectangle(cornerRadius: 12))
                 }
-                Text("分类依据是名称、目录和文件类型；不读取视频画面，也不调用云端 AI。").font(.caption).foregroundStyle(.secondary).padding(.vertical, 10)
-            }
+              }
+                Text("明确名称优先；未知视频与图片可在本机识别画面。人物近景仅作为口播建议，不分析声音，也不上传素材。").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.vertical, 10)
+            }.frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
+          }
         }
     }
 }

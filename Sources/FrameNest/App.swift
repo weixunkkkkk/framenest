@@ -10,6 +10,7 @@ import Observation
     var source: URL?
     var destination: URL?
     var mode: OrganizationMode = .move
+    var analyzeContents = true
     var reportURL: URL?
     var template = HelperModel.loadTemplate()
     var items: [OrganizeItem] = []
@@ -79,10 +80,17 @@ import Observation
     func scan(automatically: Bool = false) {
         guard let source, let destination else { status = "请先选择素材来源和目标项目。"; return }
         let selectedMode = mode
+        let recognize = analyzeContents
+        let token = UUID(); operation = token
         busy = true; finished = false; reportURL = nil; status = "正在读取文件名与目录结构……"; items = []
         Task {
             do {
-                let found = try await Task.detached { try Organizer.scan(source, destination: destination) }.value
+                let found = try await Task.detached {
+                    try Organizer.scan(source, destination: destination, analyzeContents: recognize) { message in
+                        Task { @MainActor in if self.busy && self.operation == token { self.status = message } }
+                    }
+                }.value
+                operation = UUID()
                 items = found
                 if found.isEmpty { status = "素材文件夹是空的。把文件放进去后，再点击“一键自动归类”。" }
                 else if automatically { try await perform(found, destination: destination, mode: selectedMode) }

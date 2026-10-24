@@ -88,8 +88,8 @@ def run(binary):
         client.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         check(client.request("ping")["result"] == {}, "ping")
         tools = client.request("tools/list")["result"]["tools"]
-        check(len(tools) == 6, "six tools discovered")
-        check({t["name"] for t in tools} == {"get_template", "create_project", "classify_files", "preview_organize", "get_plan", "execute_organize"}, "tool names")
+        check(len(tools) == 7, "seven tools discovered")
+        check({t["name"] for t in tools} == {"get_template", "create_project", "classify_files", "analyze_media", "preview_organize", "get_plan", "execute_organize"}, "tool names")
         check(all(t["inputSchema"]["type"] == "object" for t in tools), "input schemas")
         check(next(t for t in tools if t["name"] == "preview_organize")["annotations"]["readOnlyHint"], "preview is read-only")
         check(next(t for t in tools if t["name"] == "execute_organize")["annotations"]["destructiveHint"], "execution declares move capability")
@@ -203,6 +203,18 @@ def run(binary):
             result = client.tool("execute_organize", {"plan_id": conflict["plan_id"]})
             check(result["moved"] == 1 and (project / "05_字幕/字幕__2.srt").read_text() == "changed-caption", "move conflict receives a suffix")
             check((project / "05_字幕/字幕.srt").read_text() == "caption", "move conflict preserves existing content")
+            client.tool("analyze_media", {"paths": ["relative.png"]}, error=True)
+            check(True, "visual analysis requires absolute file paths")
+            damaged = inbox / "IMG_0001.png"
+            damaged.write_text("synthetic invalid image")
+            analyzed = client.tool("analyze_media", {"paths": [str(damaged)]})["items"][0]
+            check(analyzed["needs_review"] and analyzed["visual_analysis"]["status"] == "unavailable", "broken media returns a review result")
+            visual = client.tool("preview_organize", {"source_path": str(inbox), "destination_path": str(project)})
+            check(visual["items"][0]["visual_analysis"]["status"] == "unavailable", "preview includes visual evidence by default")
+            names_only = client.tool("preview_organize", {"source_path": str(inbox), "destination_path": str(project), "analyze_contents": False})
+            check("visual_analysis" not in names_only["items"][0], "filename-only preview can be selected")
+            client.tool("preview_organize", {"source_path": str(inbox), "destination_path": str(project), "analyze_contents": "true"}, error=True)
+            check(True, "visual toggle rejects invalid types")
     finally:
         client.close()
     check(client.process.returncode == 0, "clean shutdown on stdin EOF")
