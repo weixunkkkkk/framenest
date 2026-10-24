@@ -61,7 +61,7 @@ struct ContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(["新建项目", "素材归类", "分类规则"][model.tab]).font(.system(size: 27, weight: .bold))
-                        Text(["按你的制作习惯，准备好每个项目。", "先检查去向，再把素材放到合适的位置。", "针对科技评测、产品实拍与动画制作。"][model.tab]).foregroundStyle(.secondary)
+                        Text(["按你的制作习惯，准备好每个项目。", "素材放进一个文件夹，点一次就能归类。", "针对科技评测、产品实拍与动画制作。"][model.tab]).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Label("本地处理", systemImage: "internaldrive").font(.caption).foregroundStyle(.secondary)
@@ -102,8 +102,8 @@ struct Sidebar: View {
                 Label("实测 → 动画 → 交付", systemImage: "chart.xyaxis.line")
             }.font(.caption).foregroundStyle(.secondary)
             Divider()
-            Label("原素材保留", systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary)
-            Text("1.3.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
+            Label("移动 / 复制可选", systemImage: "folder.badge.gearshape").font(.caption).foregroundStyle(.secondary)
+            Text("1.4.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
         }.padding(18).background(Palette.accent.opacity(0.045)).disabled(model.busy)
     }
     private func nav(_ title: String, icon: String, tag: Int) -> some View {
@@ -222,6 +222,7 @@ struct ImportView: View {
     @Bindable var model: HelperModel
     @State private var query = ""
     @State private var onlyUncertain = false
+    @State private var dropTarget = false
     private var visible: [OrganizeItem] {
         model.items.filter { (!onlyUncertain || $0.category == "09_待确认") && (query.isEmpty || $0.relative.localizedCaseInsensitiveContains(query) || $0.category.localizedCaseInsensitiveContains(query)) }
     }
@@ -233,6 +234,24 @@ struct ImportView: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 12) {
+                Image(systemName: "tray.and.arrow.down.fill").font(.title2).foregroundStyle(Palette.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("把素材文件夹拖到这里").font(.headline)
+                    Text("或把文件放进项目的「00_待归类」，再点下方按钮。用途不明的文件进入「09_待确认」。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let source = model.source {
+                    Button("打开素材文件夹") { NSWorkspace.shared.open(source) }
+                }
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.accent.opacity(dropTarget ? 0.14 : 0.05), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.accent.opacity(dropTarget ? 0.8 : 0.25), style: StrokeStyle(lineWidth: 1.5, dash: [6])))
+                .dropDestination(for: URL.self) { urls, _ in
+                    guard urls.count == 1 else { model.status = "请一次拖入一个素材文件夹。"; return false }
+                    return model.useSource(urls[0])
+                } isTargeted: { dropTarget = $0 }
+            HStack(spacing: 12) {
                 PathPicker(title: "素材来源", url: model.source) { model.pick(1) }
                 Image(systemName: "arrow.right").foregroundStyle(.secondary)
                 PathPicker(title: "目标项目", url: model.destination) { model.pick(2) }
@@ -241,15 +260,18 @@ struct ImportView: View {
                 Button { model.scan() } label: { Label("扫描并预览", systemImage: "magnifyingglass") }
                     .disabled(model.source == nil || model.destination == nil)
                 Spacer()
-                Text("名称优先 → 所在目录 → 文件类型").font(.caption).foregroundStyle(.secondary)
+                Picker("归类方式", selection: $model.mode) {
+                    Text("移动素材").tag(OrganizationMode.move)
+                    Text("复制素材").tag(OrganizationMode.copy)
+                }.pickerStyle(.segmented).frame(width: 230)
             }
             if model.items.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "square.stack.3d.up.fill").font(.system(size: 48)).foregroundStyle(Palette.accent.opacity(0.7))
-                    Text("先预览，再归类").font(.title3.bold())
-                    Text("选择素材文件夹和目标项目，检查每个文件将放到哪里。\n用途不明确的素材会标为“待确认”，可以手动调整。").multilineTextAlignment(.center).foregroundStyle(.secondary)
+                    Text(model.reportURL == nil ? "文件夹已备好，素材一键归位" : "本次归类已完成").font(.title3.bold())
+                    Text("点击“一键自动归类”，自动扫描并放入对应目录。\n也可以先扫描预览，逐项修改分类后再执行。").multilineTextAlignment(.center).foregroundStyle(.secondary)
                     HStack(spacing: 22) {
-                        Label("保留原素材", systemImage: "checkmark.shield")
+                        Label(model.mode == .move ? "素材移动到项目" : "保留来源素材", systemImage: model.mode == .move ? "arrow.right.doc.on.clipboard" : "doc.on.doc")
                         Label("工程整体保留", systemImage: "folder")
                         Label("同名自动处理", systemImage: "doc.on.doc")
                     }.font(.caption).foregroundStyle(.secondary)
@@ -274,10 +296,14 @@ struct ImportView: View {
                 }.background(Palette.card, in: RoundedRectangle(cornerRadius: 12))
             }
             HStack {
-                Text("复制归类 · 相同内容跳过 · 同名不同内容加序号").font(.caption).foregroundStyle(.secondary)
+                Text(model.mode == .move ? "移动归类 · 重复项留在来源 · 同名不同内容加序号" : "复制归类 · 保留来源 · 同名不同内容加序号").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button { model.execute() } label: { Label("复制归类（\(model.items.filter { $0.selected }.count) 项）", systemImage: "tray.and.arrow.down") }
-                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.items.contains { $0.selected })
+                Button {
+                    if model.items.isEmpty { model.scan(automatically: true) } else { model.execute() }
+                } label: {
+                    Label(model.items.isEmpty ? "一键自动归类" : "归类已选（\(model.items.filter { $0.selected }.count) 项）", systemImage: "tray.and.arrow.down")
+                }.buttonStyle(.borderedProminent).controlSize(.large)
+                    .disabled(model.source == nil || model.destination == nil || (!model.items.isEmpty && !model.items.contains { $0.selected }))
             }
         }.disabled(model.busy)
     }
@@ -331,6 +357,7 @@ struct StatusBar: View {
             else { Image(systemName: model.finished ? "checkmark.circle.fill" : "info.circle").foregroundStyle(model.finished ? .green : Palette.accent) }
             Text(model.status).font(.callout).lineLimit(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
             if let dest = model.destination {
+                if let report = model.reportURL { Button("查看整理记录") { NSWorkspace.shared.open(report) }.disabled(model.busy) }
                 Button("打开项目") { NSWorkspace.shared.activateFileViewerSelecting([dest]) }.disabled(model.busy)
                 if model.finished && model.tab == 0 { Button("继续归类素材") { model.tab = 1 } }
             }
@@ -344,7 +371,7 @@ struct RulesView: View {
         ("chart.xyaxis.line", "产品资料与实测", "规格书、产品 Brief、官方资料单独存放。识别 CSV、Excel、Parquet 等数据；防抖轨迹与测试实测数据分别归类。"),
         ("waveform", "配乐与证据音", "BGM、音效、人声与现场录音分开。啸叫、底噪采样、原声优先保留为证据音。"),
         ("cube.transparent", "动画、模型与 PCB", "Blender、AE、HyperFrames 与产品模型分开。补齐 STEP、GLB、STL、EasyEDA、KiCad 和字体格式。"),
-        ("folder.fill", "完整工程保留", "识别 HyperFrames、Remotion、剪映、ChatCut、PR、达芬奇等工程标识，整个目录复制，保留内部相对引用。"),
+        ("folder.fill", "完整工程保留", "识别 HyperFrames、Remotion、剪映、ChatCut、PR、达芬奇等工程标识，整个目录移动或复制，保留内部相对引用。"),
         ("questionmark.circle", "用途不清楚时", "先看文件名，再看最近的原目录。无用途依据的 PDF、表格和相机编号视频放待确认，可在预览中修改。")
     ]
     var body: some View {

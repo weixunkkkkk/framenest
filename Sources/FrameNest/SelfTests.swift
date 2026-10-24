@@ -104,5 +104,33 @@ func runSelfTests() throws {
     try fm.createDirectory(at: cut, withIntermediateDirectories: false)
     try check(Organizer.projectCategory(cut) == "06_工程/剪辑", "ChatCut 工程包识别")
     try check(Organizer.fileType("PARQUET").label.contains("PARQUET"), "文件类型标签忽略扩展名大小写")
+    let inbox = project.appendingPathComponent(Organizer.inboxFolder)
+    try check(fm.fileExists(atPath: inbox.path), "新项目提供待归类入口")
+    let incoming = inbox.appendingPathComponent("移动字幕.srt")
+    try "1\n00:00:00,000 --> 00:00:01,000\n测试\n".write(to: incoming, atomically: true, encoding: .utf8)
+    let intact = inbox.appendingPathComponent("HyperFrames移动工程")
+    try fm.createDirectory(at: intact, withIntermediateDirectories: false)
+    try "{}".write(to: intact.appendingPathComponent("hyperframes.json"), atomically: true, encoding: .utf8)
+    try "asset".write(to: intact.appendingPathComponent("asset.png"), atomically: true, encoding: .utf8)
+    let movePlan = try Organizer.scan(inbox, destination: project)
+    try check(movePlan.count == 2 && movePlan.contains(where: \.wholeDirectory), "支持项目内部待归类并保留完整工程")
+    let moved = try Organizer.executeDetailed(movePlan, destination: project, mode: .move) { _ in }
+    try check(moved.moved == 2 && moved.copied == 0 && moved.failed == 0, "移动模式实际移动素材与工程")
+    try check(!fm.fileExists(atPath: incoming.path) && !fm.fileExists(atPath: intact.path), "移动成功后来源条目消失")
+    try check(fm.fileExists(atPath: project.appendingPathComponent("06_工程/动画/HyperFrames移动工程/asset.png").path), "移动工程包含内部资源")
+    let movedTarget = project.appendingPathComponent("05_字幕/移动字幕.srt")
+    try fm.copyItem(at: movedTarget, to: incoming)
+    let duplicateMove = try Organizer.executeDetailed(Organizer.scan(inbox, destination: project), destination: project, mode: .move) { _ in }
+    try check(duplicateMove.skipped == 1 && duplicateMove.moved == 0 && fm.fileExists(atPath: incoming.path), "移动模式重复项跳过并保留来源")
+    try "changed caption".write(to: incoming, atomically: true, encoding: .utf8)
+    let conflictMove = try Organizer.executeDetailed(Organizer.scan(inbox, destination: project), destination: project, mode: .move) { _ in }
+    try check(conflictMove.moved == 1 && !fm.fileExists(atPath: incoming.path) && fm.fileExists(atPath: project.appendingPathComponent("05_字幕/移动字幕__2.srt").path), "移动模式同名不同内容加序号")
+    try check((try String(contentsOf: movedTarget, encoding: .utf8)).contains("测试"), "同名冲突不改动已有文件")
+    try "source stays".write(to: incoming, atomically: true, encoding: .utf8)
+    var unsafePlan = try Organizer.scan(inbox, destination: project)
+    unsafePlan[0].category = Organizer.inboxFolder
+    let unsafeMove = try Organizer.executeDetailed(unsafePlan, destination: project, mode: .move) { _ in }
+    try check(unsafeMove.failed == 1 && fm.fileExists(atPath: incoming.path), "拒绝移动到来源自身且保留文件")
+    try check((try String(contentsOf: moved.reportURL, encoding: .utf8)).contains("已移动"), "移动结果写入 Markdown 记录")
     print("ALL \(checks) CHECKS PASSED")
 }

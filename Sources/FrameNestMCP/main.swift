@@ -15,11 +15,13 @@ final class OrganizationPlan {
     let destination: URL
     let destinationIdentity: String
     let items: [OrganizeItem]
+    let mode: OrganizationMode
     let fingerprints: [String: String]
     var result: [String: Any]?
     var executionKey: Data?
-    init(source: URL, destination: URL, items: [OrganizeItem]) throws {
+    init(source: URL, destination: URL, items: [OrganizeItem], mode: OrganizationMode) throws {
         self.source = source; self.destination = destination; self.items = items
+        self.mode = mode
         destinationIdentity = try MCPServer.identity(destination)
         var snapshots: [String: String] = [:]
         for item in items { snapshots[item.relative] = try MCPServer.fingerprint(item.source) }
@@ -34,7 +36,7 @@ final class MCPServer {
     var protocolVersion = versions[0]
     var plans: [String: OrganizationPlan] = [:]
     let fm = FileManager.default
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.4.0"
 
     static func json(_ object: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
@@ -86,7 +88,7 @@ final class MCPServer {
                 initialized = true
                 result = ["protocolVersion": protocolVersion, "capabilities": ["tools": ["listChanged": false]],
                           "serverInfo": ["name": "framenest", "title": "FrameNest · 影巢", "version": version],
-                          "instructions": "Local video project organizer. Use preview_organize before execute_organize. Plans expire after one hour and after this process exits. Review uncertain categories; execute only the requested files. Copies retain source files. Paths in tool arguments must be absolute or start with ~/."]
+                          "instructions": "Local video project organizer. Use preview_organize before execute_organize. Set preview mode to copy (default) or move (relocates source items). Plans expire after one hour and after this process exits. Review uncertain categories; execute only the requested files. Paths must be absolute or start with ~/."]
             case "ping": result = [:]
             case "tools/list":
                 guard initialized else { throw RPCError(code: -32000, message: "Initialize first.") }
@@ -125,9 +127,9 @@ final class MCPServer {
     static func schema(_ properties: [String: Any], required: [String] = []) -> [String: Any] {
         ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
     }
-    static func tool(_ name: String, _ title: String, _ description: String, _ input: [String: Any], readOnly: Bool = true, idempotent: Bool = true) -> [String: Any] {
+    static func tool(_ name: String, _ title: String, _ description: String, _ input: [String: Any], readOnly: Bool = true, idempotent: Bool = true, destructive: Bool = false) -> [String: Any] {
         ["name": name, "title": title, "description": description, "inputSchema": input,
-         "annotations": ["readOnlyHint": readOnly, "destructiveHint": false, "idempotentHint": idempotent, "openWorldHint": false]]
+         "annotations": ["readOnlyHint": readOnly, "destructiveHint": destructive, "idempotentHint": idempotent, "openWorldHint": false]]
     }
     static let tools: [[String: Any]] = [
         tool("get_template", "读取目录模板", "Return the saved GUI folder template, default template and available categories. Does not create folders or open the GUI.", schema([:])),
@@ -140,21 +142,22 @@ final class MCPServer {
         tool("classify_files", "判断文件分类", "Classify file names or relative paths without reading file contents. Returns suggested category, type and reason. Ambiguous items remain in 09_待确认.", schema([
             "paths": ["type": "array", "items": ["type": "string"], "minItems": 1, "maxItems": 200]
         ], required: ["paths"])),
-        tool("preview_organize", "预览素材归类", "Scan a source folder and create a one-hour in-memory copy plan. Does not write to the destination. Returns a plan_id required by execute_organize, category totals and a bounded first page; use get_plan for more items.", schema([
+        tool("preview_organize", "预览素材归类", "Scan a source folder and create a one-hour in-memory copy or move plan. Copy is the default; move relocates source items. The project inbox 00_待归类 is also supported. Preview does not write to the destination. Returns a plan_id, category totals and a bounded first page.", schema([
             "source_path": ["type": "string"], "destination_path": ["type": "string"],
+            "mode": ["type": "string", "enum": ["copy", "move"], "default": "copy"],
             "limit": ["type": "integer", "minimum": 1, "maximum": 200, "default": 50]
         ], required: ["source_path", "destination_path"])),
         tool("get_plan", "查看归类计划", "Read a page from an existing plan. Plans belong to this server process and expire after one hour. Does not rescan or change files.", schema([
             "plan_id": ["type": "string"], "offset": ["type": "integer", "minimum": 0, "default": 0],
             "limit": ["type": "integer", "minimum": 1, "maximum": 200, "default": 50]
         ], required: ["plan_id"])),
-        tool("execute_organize", "执行复制归类", "Execute a previously reviewed plan by copying files. Source files remain in place. Optionally restrict include_paths and override categories. Rejects changed source snapshots or changed destination identity. Identical repeat requests reuse the result; changed requests require a new preview.", schema([
+        tool("execute_organize", "执行素材归类", "Execute the reviewed plan using its frozen mode. Copy retains source files; move relocates them. Identical existing items are skipped and retained in the source even in move mode. Optionally restrict include_paths and override categories. Rejects changed source snapshots or destination identity. Identical repeat requests reuse the result.", schema([
             "plan_id": ["type": "string"],
             "include_paths": ["type": "array", "items": ["type": "string"], "minItems": 1, "description": "Exact relative paths from the plan; omitted means all plan items."],
             "overrides": ["type": "array", "items": schema([
                 "relative_path": ["type": "string"], "category": ["type": "string", "description": "Safe relative category path."]
             ], required: ["relative_path", "category"])]
-        ], required: ["plan_id"]), readOnly: false)
+        ], required: ["plan_id"]), readOnly: false, destructive: true)
     ]
 
     func string(_ args: [String: Any], _ key: String) throws -> String {
@@ -210,7 +213,7 @@ final class MCPServer {
     func currentTemplate() -> String {
         let saved = UserDefaults(suiteName: "io.github.weixunkkkkk.framenest")?.string(forKey: "folderTemplate")
         let legacy = Organizer.categories.prefix(20).joined(separator: "\n")
-        return saved == nil || saved == legacy ? Organizer.defaultFolders : saved!
+        return saved == nil || saved == legacy || saved == Organizer.categories.sorted().joined(separator: "\n") ? Organizer.defaultFolders : saved!
     }
     func plan(_ id: String) throws -> OrganizationPlan {
         guard let value = plans[id], Date().timeIntervalSince(value.created) < Self.ttl else {
@@ -232,7 +235,7 @@ final class MCPServer {
         for item in value.items { totals[item.category, default: 0] += 1 }
         return ["plan_id": value.id, "source_path": value.source.path, "destination_path": value.destination.path,
                 "expires_at": ISO8601DateFormatter().string(from: value.created.addingTimeInterval(Self.ttl)),
-                "total_items": value.items.count, "offset": offset, "returned_items": slice.count,
+                "total_items": value.items.count, "mode": value.mode.rawValue, "offset": offset, "returned_items": slice.count,
                 "has_more": end < value.items.count, "executed": value.result != nil,
                 "category_counts": totals, "items": slice.map { itemJSON($0, destination: value.destination) }]
     }
@@ -243,7 +246,8 @@ final class MCPServer {
         switch name {
         case "get_template":
             return ["name": "FrameNest", "version": version, "folders": currentTemplate().components(separatedBy: .newlines).filter { !$0.isEmpty },
-                    "default_folders": Organizer.categories.sorted(), "categories": Organizer.categories.sorted(), "copy_mode": "copy", "plan_ttl_seconds": Int(Self.ttl)]
+                    "default_folders": Organizer.defaultFolders.components(separatedBy: .newlines), "categories": Organizer.categories.sorted(),
+                    "copy_mode": "copy", "supported_modes": OrganizationMode.allCases.map(\.rawValue), "inbox_folder": Organizer.inboxFolder, "plan_ttl_seconds": Int(Self.ttl)]
         case "create_project":
             let parent = try directory(string(args, "parent_path"))
             var projectName = try string(args, "name")
@@ -272,10 +276,14 @@ final class MCPServer {
             let source = try directory(string(args, "source_path"))
             let destination = try directory(string(args, "destination_path"))
             let limit = try integer(args, "limit", default: 50, minimum: 1, maximum: 200)
+            let mode: OrganizationMode
+            if args["mode"] == nil { mode = .copy }
+            else if let raw = args["mode"] as? String, let parsed = OrganizationMode(rawValue: raw) { mode = parsed }
+            else { throw HelperError.message("mode must be copy or move.") }
             plans = plans.filter { Date().timeIntervalSince($0.value.created) < Self.ttl }
             guard plans.count < 32 else { throw HelperError.message("Too many active plans. Restart this MCP server or wait for plans to expire.") }
             let items = try Organizer.scan(source, destination: destination)
-            let value = try OrganizationPlan(source: source, destination: destination, items: items)
+            let value = try OrganizationPlan(source: source, destination: destination, items: items, mode: mode)
             plans[value.id] = value
             return page(value, offset: 0, limit: limit)
         case "get_plan":
@@ -313,13 +321,13 @@ final class MCPServer {
                 if let category = overrides[selected[index].relative] { selected[index].category = category; selected[index].reason = "MCP 手动指定分类" }
             }
             var count = 0
-            let completed = try Organizer.executeDetailed(selected, destination: value.destination) { message in
+            let completed = try Organizer.executeDetailed(selected, destination: value.destination, mode: value.mode) { message in
                 count += 1
                 if let token = progressToken, token is String || token is NSNumber {
                     self.send(["jsonrpc": "2.0", "method": "notifications/progress", "params": ["progressToken": token, "progress": count, "total": selected.count, "message": message]])
                 }
             }
-            let result: [String: Any] = ["plan_id": value.id, "copied": completed.copied, "skipped": completed.skipped,
+            let result: [String: Any] = ["plan_id": value.id, "mode": value.mode.rawValue, "copied": completed.copied, "moved": completed.moved, "skipped": completed.skipped,
                                        "failed": completed.failed, "report_path": completed.reportURL.path,
                                        "summary": completed.summary, "reused_result": false]
             value.result = result; value.executionKey = key
@@ -330,7 +338,7 @@ final class MCPServer {
 }
 
 if CommandLine.arguments.contains("--version") {
-    print("FrameNestMCP 1.3.0")
+    print("FrameNestMCP 1.4.0")
 } else {
     MCPServer().run()
 }

@@ -6,22 +6,23 @@
 
 **为视频创作者准备的 macOS 项目文件夹与素材整理工具。**
 
-一键生成项目目录，预览素材去向，再复制归类。把文稿、拍摄素材、实测数据、剪辑工程、动画和交付文件放到各自的位置。
+一键生成项目目录，把素材放进“00_待归类”，再点一次自动归类。支持移动和复制两种方式。把文稿、拍摄素材、实测数据、剪辑工程、动画和交付文件放到各自的位置。
 
 [English ↓](#english) · [下载 / Downloads](https://github.com/weixunkkkkk/framenest/releases) · [MIT License](LICENSE)
 
-![FrameNest 实际界面](docs/screenshots/overview.jpg)
+![FrameNest 一键归类实际界面](docs/screenshots/organize.png)
 
 ## 能做什么
 
 - **一键新建项目**：项目名、日期后缀、保存位置和目录模板可配置。
 - **图形目录预览**：分类图标和子目录一目了然，模板支持编辑与保存。
-- **复制前预览**：显示文件类型、建议分类和判断依据，支持搜索、待确认筛选及逐项调整。
-- **保留原素材**：采用复制归类；内容相同则跳过，同名不同内容自动加序号。
-- **保留工程结构**：识别剪映、ChatCut、PR、达芬奇、HyperFrames、Remotion 等工程标识，整体复制目录。
+- **一键自动归类**：创建项目后自动进入归类页；素材放进“00_待归类”，或拖入外部素材文件夹，即可一键扫描并整理。
+- **可选预览**：显示文件类型、建议分类和判断依据，支持搜索、待确认筛选及逐项调整。
+- **移动 / 复制可选**：界面默认移动素材，复制模式保留来源。内容相同则跳过并保留来源，同名不同内容自动加序号。
+- **保留工程结构**：识别剪映、ChatCut、PR、达芬奇、HyperFrames、Remotion 等工程标识，整体移动或复制目录。
 - **本地处理**：无需账号、网络或外部 AI 服务。整理过程生成 Markdown 记录。
 
-分类使用文件名、最近的父目录和文件格式，不会分析视频画面。用途不明确的文件进入“待确认”，由你在预览中决定。
+分类使用文件名、最近的父目录和文件格式，不会分析视频画面。用途不明确的文件进入“待确认”，可以在预览中调整，也可以整理后再确认。
 
 ## 安装与使用
 
@@ -30,8 +31,9 @@
 1. 从 [Releases](https://github.com/weixunkkkkk/framenest/releases) 下载 `FrameNest-…-macOS-arm64.zip`。
 2. 解压后将 `FrameNest.app` 放入“应用程序”。
 3. 在“新建项目”中输入项目名，选择保存位置，点击“创建项目文件夹”。
-4. 进入“素材归类”，选择素材来源与目标项目，点击“扫描并预览”。
-5. 检查或修改分类，再点击“复制归类”。
+4. 创建后自动进入“素材归类”；点击“打开素材文件夹”，把视频、图片和其他素材放入“00_待归类”。也可以将外部素材文件夹拖进窗口上方的导入区域。
+5. 选择“移动素材”或“复制素材”，点击“一键自动归类”。默认移动；用途不明确的文件进入“09_待确认”。需要调整时，可先“扫描并预览”，修改后点击“归类已选”。
+6. 完成后打开项目或查看 Markdown 整理记录。移动模式下，重复项仍保留在来源。
 
 预编译包使用 ad-hoc 本地签名，未进行 Apple 公证，也可以按下文从源码构建。
 
@@ -39,6 +41,7 @@
 
 ```text
 产品X_开箱评测_20261024/
+├── 00_待归类/         # 新素材统一放这里，一键整理
 ├── 01_文稿与资料/     # 口播与分镜、产品资料、实测数据
 ├── 02_原始素材/       # 口播、产品实拍、屏幕录制
 ├── 03_音频/           # 配音与现场声、BGM、音效
@@ -75,17 +78,17 @@
 - `外壳.step` → `06_工程/产品模型与PCB`。
 - `C0001.mp4`、用途不明的 PDF 和表格 → `09_待确认`。
 
-复制时保留原文件名与原子目录。来源和目标不能相同或互相包含；散落的隐藏项、缓存、应用包与符号链接会跳过。识别为完整工程的目录整体复制，内部资源也一起保留。
+归类时保留原文件名与原子目录。支持项目内部的“00_待归类”作为来源；其他来源与目标不能相同或互相包含。散落的隐藏项、缓存、应用包与符号链接会跳过。识别为完整工程的目录整体移动或复制，内部资源也一起保留。
 
 ## 接入 Codex / MCP
 
-1.3 版内置独立的本地 MCP 程序，与图形版共享分类和复制逻辑。Codex 可以读取模板、创建项目、预览归类计划、调整分类并执行复制。MCP 操作不需要打开图形窗口。
+1.3 起内置独立的本地 MCP 程序，与图形版共享整理逻辑。1.4 增加项目内部待归类入口和移动模式。Codex 可以读取模板、创建项目、预览归类计划、调整分类并执行移动或复制。MCP 操作不需要打开图形窗口。
 
 ```bash
 codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP
 ```
 
-需要 FrameNest 1.3 或更新版本。先预览、再按计划复制；来源变化时需要重新预览。详细配置、工具列表和示例见 [MCP 接入说明](docs/mcp.md)。
+移动模式与项目内部待归类需要 FrameNest 1.4 或更新版本。MCP 预览默认复制，指定 `mode: "move"` 后按计划移动；来源变化时需要重新预览。详细配置、工具列表和示例见 [MCP 接入说明](docs/mcp.md)。
 
 ## 从源码构建
 
@@ -109,7 +112,7 @@ swift build -c release
 bash Scripts/package_release.sh
 ```
 
-Python 3 仅用于 MCP 开发测试；运行应用和 MCP 不依赖 Python。核心自检覆盖分类优先级、工程完整复制、原文件保留、重复跳过、同名保护及路径边界。源码通过本机架构构建；当前发布的预编译包不包含 Intel 版本。
+Python 3 仅用于 MCP 开发测试；运行应用和 MCP 不依赖 Python。核心自检覆盖分类优先级、项目待归类入口、工程整体移动与复制、原文件保留、重复跳过、同名保护及路径边界。源码通过本机架构构建；当前发布的预编译包不包含 Intel 版本。
 
 ## 贡献与许可
 
@@ -123,14 +126,15 @@ Python 3 仅用于 MCP 开发测试；运行应用和 MCP 不依赖 Python。核
 
 **FrameNest is a local macOS project-folder and media organizer for video creators.**
 
-Create a project structure, preview where files will go, and copy them into categories for scripts, footage, test data, editing projects, animation, and delivery.
+Create a project structure, put media in its `00_待归类` inbox, and organize it with one click. Move or copy files into categories for scripts, footage, test data, editing projects, animation, and delivery.
 
 ### Features
 
 - **Create projects in one step:** configure the project name, date suffix, destination, and folder template.
 - **Visual folder preview:** inspect category icons and subfolders, then edit and save your template.
-- **Review before copying:** see file types, suggested destinations, and classification reasons; search, filter uncertain items, and override categories.
-- **Keep source files:** copies retain original names and relative subfolders. Identical contents are skipped; different contents with the same name receive a numeric suffix.
+- **One-click organization:** use the project inbox or drag in an external media folder. The app scans and organizes in one operation.
+- **Optional preview:** see file types, suggested destinations, and classification reasons; search, filter uncertain items, and override categories.
+- **Move or copy:** the GUI defaults to moving files; copy mode keeps source files. Original names and relative subfolders are retained. Identical items are skipped and left in the source in both modes; different contents with the same name receive a suffix.
 - **Keep recognized projects intact:** supported project markers include Jianying/CapCut, ChatCut, Premiere Pro, DaVinci Resolve, HyperFrames, and Remotion.
 - **Work locally:** no account, network connection, or external AI service is required. Each operation creates a Markdown report.
 
@@ -147,9 +151,9 @@ Download the ZIP from [Releases](https://github.com/weixunkkkkk/framenest/releas
 ### Typical workflow
 
 1. Open the first sidebar page, enter a project name, choose a location, and create the project folders.
-2. Open the media organization page and select the source and destination folders.
-3. Scan the source, review suggested categories, and change any uncertain assignments.
-4. Copy the selected items. Original files remain in place, and the destination receives a Markdown operation report.
+2. The media page opens automatically with the new project inbox selected. Put your files in `00_待归类`, or drag an external source folder into the import area.
+3. Choose move (GUI default) or copy, then click the one-click organization button. Ambiguous items go to `09_待确认`. Optionally scan first, review the plan, and organize the selected items.
+4. Open the project or its Markdown operation report. Duplicate items remain in the source even in move mode.
 
 The default template separates scripts and reference documents, footage, audio, images and covers, subtitles, editing and animation projects, exports, delivery records, and items needing review. Templates use one relative path per line, with `/` for subfolders.
 
@@ -169,17 +173,17 @@ The default template separates scripts and reference documents, footage, audio, 
 
 Specific file names take priority over generic parent-folder hints. For example, a review export inside a talking-head folder remains a preview export, and a recording of equipment noise inside a BGM folder remains source audio. Unknown PDFs, spreadsheets, and camera-numbered clips are left for review.
 
-Source and destination folders must not overlap. Loose hidden files, caches, application bundles, and symbolic links are skipped. Recognized project folders are copied as complete units, including their internal resources.
+The project inbox `00_待归类` is supported as a source. Other source and destination folders must not overlap. Loose hidden files, caches, application bundles, and symbolic links are skipped. Recognized project folders are moved or copied as complete units, including their internal resources.
 
 ### Codex and MCP
 
-FrameNest 1.3 includes a native stdio MCP server sharing the GUI engine. Codex can read templates, create projects, preview copy plans, override categories, and copy selected files without opening the GUI.
+FrameNest 1.3 introduced a native stdio MCP server sharing the GUI engine. Version 1.4 adds move plans and the project inbox. Codex can read templates, create projects, preview plans, override categories, and move or copy selected files without opening the GUI.
 
 ```bash
 codex mcp add framenest -- /Applications/FrameNest.app/Contents/MacOS/FrameNestMCP
 ```
 
-Install version 1.3 or newer. Preview before execution; changed source snapshots require a new plan. See the bilingual [MCP guide](docs/mcp.md) for configuration and tool examples.
+Install version 1.4 or newer for move mode and the project inbox. MCP preview defaults to copy; set `mode` to `move` to relocate files. Changed source snapshots require a new plan. See the bilingual [MCP guide](docs/mcp.md) for configuration and tool examples.
 
 ### Build from source
 
@@ -195,7 +199,7 @@ python3 Scripts/test_mcp.py
 
 The build produces `FrameNest.app` in the repository root, including icon resources and an ad-hoc signature. Use `bash Scripts/package_release.sh` to create a versioned ZIP and SHA-256 file. Source builds use the host Mac's architecture; no Intel prebuilt download is currently provided.
 
-Python 3 is only needed for the MCP development checks, not to run the app or server. Self-checks cover classification precedence, complete project copying, source preservation, duplicate detection, same-name handling, and path boundaries.
+Python 3 is only needed for the MCP development checks, not to run the app or server. Self-checks cover classification precedence, project inboxes, complete project moving and copying, source preservation, duplicate detection, same-name handling, and path boundaries.
 
 ### Contributing and license
 

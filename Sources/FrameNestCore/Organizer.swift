@@ -15,13 +15,21 @@ public struct OrganizeItem: Identifiable {
     }
 }
 
+public enum OrganizationMode: String, CaseIterable, Sendable {
+    case copy, move
+    public var title: String { self == .move ? "移动" : "复制" }
+}
+
 public struct OrganizationResult {
     public let copied: Int
+    public let moved: Int
     public let skipped: Int
     public let failed: Int
     public let reportURL: URL
+    public let mode: OrganizationMode
     public var summary: String {
-        "完成：复制 \(copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。\n归类记录已保存在「08_交付与发布/整理记录」。"
+        "完成：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。\n" +
+        (mode == .move && skipped > 0 ? "重复项仍保留在来源。" : "") + "归类记录已保存在「08_交付与发布/整理记录」。"
     }
 }
 
@@ -32,6 +40,7 @@ public enum HelperError: LocalizedError {
 
 public enum Organizer {
     public static let fm = FileManager.default
+    public static let inboxFolder = "00_待归类"
     public static let categories = [
         "01_文稿与资料/口播与分镜", "01_文稿与资料/产品资料", "01_文稿与资料/实测数据",
         "02_原始素材/口播", "02_原始素材/产品实拍", "02_原始素材/屏幕录制",
@@ -41,7 +50,7 @@ public enum Organizer {
         "08_交付与发布/发布文案", "08_交付与发布/交付记录", "09_待确认",
         "06_工程/产品模型与PCB", "06_工程/字体与设计素材", "06_工程/脚本与工具"
     ]
-    public static let defaultFolders = categories.sorted().joined(separator: "\n")
+    public static let defaultFolders = ([inboxFolder] + categories.sorted()).joined(separator: "\n")
     public static func fail(_ s: String) throws -> Never { throw HelperError.message(s) }
     public static func safeRelative(_ s: String) -> Bool {
         !s.isEmpty && !s.hasPrefix("/") && !s.contains("\\") && !s.contains(":") && !s.contains("\0") &&
@@ -57,7 +66,7 @@ public enum Organizer {
         guard !fm.fileExists(atPath: root.path) else { try fail("同名项目已存在，请换一个名字。已有文件不会被覆盖。") }
         try fm.createDirectory(at: root, withIntermediateDirectories: false)
         for path in paths { try fm.createDirectory(at: root.appendingPathComponent(path), withIntermediateDirectories: true) }
-        let note = "# \(clean)\n\n创建时间：\(Date().formatted(date: .numeric, time: .shortened))\n\n按视频制作工作流创建。原始素材、实测数据、工程、导出与发布记录分别保存。成片导出不代表已经发布。\n\n## 目录\n\n" + paths.map { "- `\($0)`" }.joined(separator: "\n") + "\n"
+        let note = "# \(clean)\n\n创建时间：\(Date().formatted(date: .numeric, time: .shortened))\n\n把素材放入「00_待归类」，在影巢中点击“一键自动归类”。也可以选择外部素材文件夹。移动模式会将文件放到对应目录，复制模式保留来源文件。重复项跳过并保留在来源；同名不同内容加序号。\n\n分类按文件名、原目录与格式判断，用途不明确的文件放入「09_待确认」。成片导出不代表已经发布。\n\n## 目录\n\n" + paths.map { "- `\($0)`" }.joined(separator: "\n") + "\n"
         try note.write(to: root.appendingPathComponent("项目说明.md"), atomically: true, encoding: .utf8)
         return root
     }
@@ -179,7 +188,10 @@ public enum Organizer {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let src = source.path
         let dst = destination.resolvingSymlinksInPath().standardizedFileURL.path
-        guard src != dst, !dst.hasPrefix(src + "/"), !src.hasPrefix(dst + "/") else { try fail("素材来源和目标项目不能相同或互相包含，请选择另一个位置。") }
+        let inbox = URL(fileURLWithPath: dst).appendingPathComponent(inboxFolder).path
+        guard src != dst, !dst.hasPrefix(src + "/"), !src.hasPrefix(dst + "/") || src == inbox else {
+            try fail("请选择项目外的素材文件夹，或当前项目的「00_待归类」。其他项目子目录不能作为来源。")
+        }
         if let category = projectCategory(source) { return [.init(source: source, relative: source.lastPathComponent, category: category, reason: "完整工程目录，保留内部引用", wholeDirectory: true)] }
         var items: [OrganizeItem] = []
         var scanError: Error?
@@ -222,17 +234,17 @@ public enum Organizer {
         let base = root.resolvingSymlinksInPath().standardizedFileURL.path
         guard target.hasPrefix(base + "/") else { try fail("目标目录包含指向项目外的链接，请换一个目标项目。") }
     }
-    public static func execute(_ items: [OrganizeItem], destination: URL, progress: (String) -> Void) throws -> String {
-        try executeDetailed(items, destination: destination, progress: progress).summary
+    public static func execute(_ items: [OrganizeItem], destination: URL, mode: OrganizationMode = .copy, progress: (String) -> Void) throws -> String {
+        try executeDetailed(items, destination: destination, mode: mode, progress: progress).summary
     }
-    public static func executeDetailed(_ items: [OrganizeItem], destination: URL, progress: (String) -> Void) throws -> OrganizationResult {
-        var copied = 0, skipped = 0, failed = 0
+    public static func executeDetailed(_ items: [OrganizeItem], destination: URL, mode: OrganizationMode = .copy, progress: (String) -> Void) throws -> OrganizationResult {
+        var copied = 0, moved = 0, skipped = 0, failed = 0
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let logs = destination.appendingPathComponent("08_交付与发布/整理记录", isDirectory: true)
         try ensureInside(logs, root: destination)
         try fm.createDirectory(at: logs, withIntermediateDirectories: true)
         let report = logs.appendingPathComponent("素材归类_\(stamp)_\(UUID().uuidString.prefix(6)).md")
-        var lines = ["# 素材归类记录", "", "方式：复制归类。原文件保留，保留原子文件夹结构；同名内容相同则跳过，不同则加序号。", ""]
+        var lines = ["# 素材归类记录", "", "方式：\(mode.title)归类。\(mode == .move ? "成功后来源文件移到目标目录；重复项跳过并保留在来源。" : "原文件保留。")保留原子文件夹结构；同名内容相同则跳过，不同则加序号。", ""]
         let selected = items.filter(\.selected)
         for (index, item) in selected.enumerated() {
             progress("正在整理 \(index + 1)/\(selected.count)：\(item.source.lastPathComponent)")
@@ -240,6 +252,14 @@ public enum Organizer {
                 guard safeRelative(item.category), safeRelative(item.relative) else { try fail("无效的目标路径。") }
                 let base = destination.appendingPathComponent(item.category).appendingPathComponent(item.relative)
                 try ensureInside(base, root: destination)
+                let sourcePath = item.source.resolvingSymlinksInPath().standardizedFileURL.path
+                let targetPath = base.resolvingSymlinksInPath().standardizedFileURL.path
+                guard targetPath != sourcePath, !targetPath.hasPrefix(sourcePath + "/") else {
+                    try fail("归类位置不能指向来源文件或来源工程内部。")
+                }
+                guard (try fm.attributesOfItem(atPath: item.source.path)[.type] as? FileAttributeType) != .typeSymbolicLink else {
+                    try fail("来源已变为链接，请重新扫描。")
+                }
                 var target = base
                 var n = 2
                 var duplicate = false
@@ -254,15 +274,16 @@ public enum Organizer {
                 else {
                     try ensureInside(target, root: destination)
                     try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try fm.copyItem(at: item.source, to: target)
-                    copied += 1; lines.append("- 已复制：`\(item.source.path)` → `\(target.path)`")
+                    if mode == .move { try fm.moveItem(at: item.source, to: target); moved += 1 }
+                    else { try fm.copyItem(at: item.source, to: target); copied += 1 }
+                    lines.append("- 已\(mode.title)：`\(item.source.path)` → `\(target.path)`")
                 }
             } catch { failed += 1; lines.append("- 失败：`\(item.source.path)`；\(error.localizedDescription)") }
             try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
         }
-        let summary = "完成：复制 \(copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。"
+        let summary = "完成：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。"
         lines.append("\n" + summary)
         try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
-        return OrganizationResult(copied: copied, skipped: skipped, failed: failed, reportURL: report)
+        return OrganizationResult(copied: copied, moved: moved, skipped: skipped, failed: failed, reportURL: report, mode: mode)
     }
 }
