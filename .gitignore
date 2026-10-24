@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+*.app/
+*.dmg
+*.log
+dist/
+local/
+Icon.icns
+.env
+.env.*
