@@ -10,9 +10,13 @@
 
 [English ↓](#english) · [下载 / Downloads](https://github.com/weixunkkkkk/framenest/releases) · [MIT License](LICENSE)
 
-![FrameNest 一键归类实际界面](docs/screenshots/organize-1.5.png)
+![FrameNest 一键归类实际界面](docs/screenshots/organize-1.6.jpg)
 
-[新建项目页](docs/screenshots/new-project-1.5.png) · [分类规则页](docs/screenshots/rules-1.5.png)
+[新建项目页](docs/screenshots/new-project-1.6.jpg) · [分类规则页](docs/screenshots/rules-1.6.jpg)
+
+## 1.6 更新
+
+视频抽帧与文字识别减少重复处理，素材表格改用原生控件，并增加可停止的线性进度。⌘N 新建项目、⌘O 导入素材，⌘1 / ⌘2 / ⌘3 切换页面。性能数据、验证范围与 Apple 设计依据见[性能与 macOS 设计调整](docs/performance-and-design.md)。
 
 ## 能做什么
 
@@ -130,6 +134,10 @@ Python 3 仅用于 MCP 开发测试；运行应用和 MCP 不依赖 Python。核
 **FrameNest is a local macOS project-folder and media organizer for video creators.**
 
 Create a project structure, put media in its `00_待归类` inbox, and organize it with one click. Move or copy files into categories for scripts, footage, test data, editing projects, animation, and delivery.
+
+### Version 1.6
+
+Batched video sampling, selective OCR, native table/sidebar controls, and cancellable linear progress. See the bilingual [performance and macOS design report](docs/performance-and-design.md) for measurements, validation scope, and Apple HIG references.
 
 ### Features
 

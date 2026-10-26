@@ -47,7 +47,7 @@ func runVisualSelfTests(base: URL, check: (Bool, String) throws -> Void) throws 
     let failed = VisualClassifier.analyze(broken, useCache: false)
     try check(failed.category == nil && failed.status == "unavailable", "损坏图片保留待确认")
     let named = OrganizeItem(source: screenshot, relative: "产品原图.png", category: "04_图片与封面/产品原图", reason: "明确名称")
-    let unchanged = VisualClassifier.refine([named], useCache: false)
+    let unchanged = try VisualClassifier.refine([named], useCache: false)
     try check(unchanged[0].category == named.category && unchanged[0].visualAnalysis == nil, "画面识别保留明确的名称分类")
     let directory = OrganizeItem(source: root, relative: "HyperFrames工程", category: "06_工程/动画", reason: "完整工程", wholeDirectory: true)
     try check(!VisualClassifier.eligible(directory), "完整工程不会展开做画面识别")

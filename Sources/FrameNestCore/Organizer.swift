@@ -1,6 +1,6 @@
 import Foundation
 
-public struct OrganizeItem: Identifiable {
+public struct OrganizeItem: Identifiable, Sendable {
     public let id = UUID()
     public let source: URL
     public let relative: String
@@ -21,15 +21,16 @@ public enum OrganizationMode: String, CaseIterable, Sendable {
     public var title: String { self == .move ? "移动" : "复制" }
 }
 
-public struct OrganizationResult {
+public struct OrganizationResult: Sendable {
     public let copied: Int
     public let moved: Int
     public let skipped: Int
     public let failed: Int
     public let reportURL: URL
     public let mode: OrganizationMode
+    public let cancelled: Bool
     public var summary: String {
-        "完成：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。\n" +
+        "\(cancelled ? "已停止" : "完成")：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。\n" +
         (mode == .move && skipped > 0 ? "重复项仍保留在来源。" : "") + "归类记录已保存在「08_交付与发布/整理记录」。"
     }
 }
@@ -185,7 +186,9 @@ public enum Organizer {
         }
         return nil
     }
-    public static func scan(_ source: URL, destination: URL, analyzeContents: Bool = false, progress: (String) -> Void = { _ in }) throws -> [OrganizeItem] {
+    public static func scan(_ source: URL, destination: URL, analyzeContents: Bool = false, control: OperationControl? = nil, progress: (String) -> Void = { _ in }) throws -> [OrganizeItem] {
+        try control?.checkpoint()
+        control?.report(.scanning, completed: 0, total: nil, message: "正在读取文件名与目录结构……")
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let src = source.path
         let dst = destination.resolvingSymlinksInPath().standardizedFileURL.path
@@ -199,6 +202,8 @@ public enum Organizer {
         let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey]
         guard let en = fm.enumerator(at: source, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles], errorHandler: { _, err in scanError = err; return false }) else { try fail("无法读取素材文件夹。") }
         for case let url as URL in en {
+            try control?.checkpoint()
+            control?.report(.scanning, completed: items.count, total: nil, message: "正在扫描：\(url.lastPathComponent)")
             let r = try url.resourceValues(forKeys: Set(keys))
             if r.isSymbolicLink == true { continue }
             let canonical = url.resolvingSymlinksInPath().standardizedFileURL
@@ -218,7 +223,7 @@ public enum Organizer {
         }
         if let e = scanError { throw e }
         let sorted = items.sorted { $0.relative.localizedStandardCompare($1.relative) == .orderedAscending }
-        return analyzeContents ? VisualClassifier.refine(sorted, progress: progress) : sorted
+        return analyzeContents ? try VisualClassifier.refine(sorted, control: control, progress: progress) : sorted
     }
     public static func ensureInside(_ url: URL, root: URL) throws {
         var ancestor = url.standardizedFileURL
@@ -239,17 +244,28 @@ public enum Organizer {
     public static func execute(_ items: [OrganizeItem], destination: URL, mode: OrganizationMode = .copy, progress: (String) -> Void) throws -> String {
         try executeDetailed(items, destination: destination, mode: mode, progress: progress).summary
     }
-    public static func executeDetailed(_ items: [OrganizeItem], destination: URL, mode: OrganizationMode = .copy, progress: (String) -> Void) throws -> OrganizationResult {
+    public static func executeDetailed(_ items: [OrganizeItem], destination: URL, mode: OrganizationMode = .copy, control: OperationControl? = nil, progress: (String) -> Void) throws -> OrganizationResult {
+        try control?.checkpoint()
         var copied = 0, moved = 0, skipped = 0, failed = 0
+        var cancelled = false
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let logs = destination.appendingPathComponent("08_交付与发布/整理记录", isDirectory: true)
         try ensureInside(logs, root: destination)
         try fm.createDirectory(at: logs, withIntermediateDirectories: true)
         let report = logs.appendingPathComponent("素材归类_\(stamp)_\(UUID().uuidString.prefix(6)).md")
-        var lines = ["# 素材归类记录", "", "方式：\(mode.title)归类。\(mode == .move ? "成功后来源文件移到目标目录；重复项跳过并保留在来源。" : "原文件保留。")保留原子文件夹结构；同名内容相同则跳过，不同则加序号。", ""]
+        let header = "# 素材归类记录\n\n方式：\(mode.title)归类。\(mode == .move ? "成功后来源文件移到目标目录；重复项跳过并保留在来源。" : "原文件保留。")保留原子文件夹结构；同名内容相同则跳过，不同则加序号。\n\n"
+        try Data(header.utf8).write(to: report, options: .withoutOverwriting)
+        let handle = try FileHandle(forWritingTo: report)
+        try handle.seekToEnd()
+        defer { try? handle.close() }
+        func append(_ line: String) throws { try handle.write(contentsOf: Data((line + "\n").utf8)) }
         let selected = items.filter(\.selected)
         for (index, item) in selected.enumerated() {
+            if control?.isCancelled == true { cancelled = true; break }
             progress("正在整理 \(index + 1)/\(selected.count)：\(item.source.lastPathComponent)")
+            control?.report(.organizing, completed: index, total: selected.count, message: "正在\(mode.title)：\(item.source.lastPathComponent)")
+            if control?.isCancelled == true { cancelled = true; break }
+            let line: String
             do {
                 guard safeRelative(item.category), safeRelative(item.relative) else { try fail("无效的目标路径。") }
                 let base = destination.appendingPathComponent(item.category).appendingPathComponent(item.relative)
@@ -266,26 +282,29 @@ public enum Organizer {
                 var n = 2
                 var duplicate = false
                 while fm.fileExists(atPath: target.path) {
+                    try control?.checkpoint()
                     if fm.contentsEqual(atPath: item.source.path, andPath: target.path) { duplicate = true; break }
                     let stem = base.deletingPathExtension().lastPathComponent
                     let suffix = base.pathExtension.isEmpty ? "" : "." + base.pathExtension
                     target = base.deletingLastPathComponent().appendingPathComponent("\(stem)__\(n)\(suffix)")
                     n += 1
                 }
-                if duplicate { skipped += 1; lines.append("- 跳过相同内容：`\(item.source.path)` → `\(target.path)`") }
+                if duplicate { skipped += 1; line = "- 跳过相同内容：`\(item.source.path)` → `\(target.path)`" }
                 else {
                     try ensureInside(target, root: destination)
                     try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                     if mode == .move { try fm.moveItem(at: item.source, to: target); moved += 1 }
                     else { try fm.copyItem(at: item.source, to: target); copied += 1 }
-                    lines.append("- 已\(mode.title)：`\(item.source.path)` → `\(target.path)`；依据：\(item.reason)")
+                    line = "- 已\(mode.title)：`\(item.source.path)` → `\(target.path)`；依据：\(item.reason)"
                 }
-            } catch { failed += 1; lines.append("- 失败：`\(item.source.path)`；\(error.localizedDescription)") }
-            try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
+            } catch is CancellationError { cancelled = true; break }
+            catch { failed += 1; line = "- 失败：`\(item.source.path)`；\(error.localizedDescription)" }
+            try append(line)
         }
-        let summary = "完成：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。"
-        lines.append("\n" + summary)
-        try lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
-        return OrganizationResult(copied: copied, moved: moved, skipped: skipped, failed: failed, reportURL: report, mode: mode)
+        let summary = "\(cancelled ? "已停止" : "完成")：\(mode.title) \(mode == .move ? moved : copied) 项，跳过重复 \(skipped) 项，失败 \(failed) 项。"
+        try append("\n" + summary)
+        try handle.synchronize()
+        if !cancelled { control?.report(.organizing, completed: selected.count, total: selected.count, message: summary) }
+        return OrganizationResult(copied: copied, moved: moved, skipped: skipped, failed: failed, reportURL: report, mode: mode, cancelled: cancelled)
     }
 }
