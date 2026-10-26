@@ -41,9 +41,10 @@ struct Panel<Content: View>: View {
 
 struct AppMark: View {
     let size: CGFloat
+    private static let icon = NSImage(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcon.png"))
     var body: some View {
         Group {
-            if let icon = NSImage(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcon.png")) {
+            if let icon = Self.icon {
                 Image(nsImage: icon).resizable().interpolation(.high)
             } else {
                 Image(systemName: "folder.badge.gearshape").resizable().scaledToFit().padding(6).foregroundStyle(Palette.accent)
@@ -53,19 +54,18 @@ struct AppMark: View {
 }
 
 struct ContentView: View {
-    @State private var model = HelperModel()
+    @Bindable var model: HelperModel
     var body: some View {
-        HStack(spacing: 0) {
-            Sidebar(model: model).frame(width: 202)
-            Divider()
-            VStack(alignment: .leading, spacing: 22) {
+        NavigationSplitView {
+            Sidebar(model: model).navigationSplitViewColumnWidth(min: 185, ideal: 210, max: 260)
+        } detail: {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(["新建项目", "素材归类", "分类规则"][model.tab]).font(.system(size: 27, weight: .bold))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(["新建项目", "素材归类", "分类规则"][model.tab]).font(.title2.bold())
                         Text(["按你的制作习惯，准备好每个项目。", "素材放进一个文件夹，点一次就能归类。", "针对科技评测、产品实拍与动画制作。"][model.tab]).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Label("本地处理", systemImage: "internaldrive").font(.caption).foregroundStyle(.secondary)
                 }
                 Group {
                     switch model.tab {
@@ -76,47 +76,49 @@ struct ContentView: View {
                 }.frame(maxWidth: .infinity, maxHeight: 760)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 StatusBar(model: model)
-            }.padding(.horizontal, 32).padding(.vertical, 28)
-                .frame(minWidth: 800, maxWidth: 1140, maxHeight: .infinity)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center).background(Palette.canvas)
-        }.tint(Palette.accent).frame(minWidth: 1050, minHeight: 740)
+            }.padding(24).frame(minWidth: 740, maxWidth: 1140, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.canvas)
+                .navigationTitle("FrameNest")
+                .toolbar {
+                    ToolbarItemGroup {
+                        Button { model.tab = 1; model.pick(1) } label: { Label("导入素材", systemImage: "folder.badge.plus") }
+                            .help("选择素材文件夹（⌘O）").keyboardShortcut("o").disabled(model.busy)
+                        if let destination = model.destination {
+                            Button { NSWorkspace.shared.activateFileViewerSelecting([destination]) } label: { Label("在 Finder 中显示项目", systemImage: "folder") }
+                        }
+                    }
+                }
+        }.navigationSplitViewStyle(.balanced).tint(Palette.accent).frame(minWidth: 950, minHeight: 680)
     }
 }
 
 struct Sidebar: View {
     @Bindable var model: HelperModel
+    private var selection: Binding<Int?> {
+        Binding(get: { model.tab }, set: { if let page = $0 { model.tab = page } })
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 9) {
-                AppMark(size: 42)
+                AppMark(size: 34)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("FrameNest").font(.headline)
                     Text("影巢 · 视频项目助手").font(.caption).foregroundStyle(.secondary)
                 }
-            }.padding(.top, 12)
-            VStack(spacing: 7) {
-                nav("新建项目", icon: "folder.badge.plus", tag: 0)
-                nav("素材归类", icon: "square.stack.3d.up", tag: 1)
-                nav("分类规则", icon: "slider.horizontal.3", tag: 2)
-            }
-            Spacer()
-            VStack(alignment: .leading, spacing: 9) {
-                Text("你的制作流程").font(.caption.bold()).foregroundStyle(.secondary)
-                Label("文稿 → 拍摄 → 剪辑", systemImage: "video")
-                Label("实测 → 动画 → 交付", systemImage: "chart.xyaxis.line")
-            }.font(.caption).foregroundStyle(.secondary)
-            Divider()
-            Label("移动 / 复制可选", systemImage: "folder.badge.gearshape").font(.caption).foregroundStyle(.secondary)
-            Text("1.5.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
-        }.padding(18).background(Palette.accent.opacity(0.045)).disabled(model.busy)
-    }
-    private func nav(_ title: String, icon: String, tag: Int) -> some View {
-        Button { model.tab = tag } label: {
-            Label(title, systemImage: icon).font(.system(size: 14, weight: model.tab == tag ? .semibold : .regular))
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 12)
-                .foregroundStyle(model.tab == tag ? Palette.accent : .primary)
-                .background(model.tab == tag ? Palette.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 9))
-        }.buttonStyle(.plain).accessibilityAddTraits(model.tab == tag ? .isSelected : [])
+            }.padding(.horizontal, 16).padding(.top, 16)
+            List(selection: selection) {
+                Section("工作区") {
+                    Label("新建项目", systemImage: "folder.badge.plus").tag(0)
+                    Label("素材归类", systemImage: "square.stack.3d.up").tag(1)
+                    Label("分类规则", systemImage: "slider.horizontal.3").tag(2)
+                }
+            }.listStyle(.sidebar)
+            VStack(alignment: .leading, spacing: 8) {
+                Label("本地画面识别", systemImage: "eye")
+                Label("移动 / 复制可选", systemImage: "folder.badge.gearshape")
+                Text("1.6.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
+            }.font(.caption).foregroundStyle(.secondary).padding(16)
+        }
     }
 }
 
@@ -230,11 +232,6 @@ struct ImportView: View {
     private var visible: [OrganizeItem] {
         model.items.filter { (!onlyUncertain || $0.category == "09_待确认") && (query.isEmpty || $0.relative.localizedCaseInsensitiveContains(query) || $0.category.localizedCaseInsensitiveContains(query)) }
     }
-    private func binding(_ item: OrganizeItem) -> Binding<OrganizeItem> {
-        Binding(get: { model.items.first(where: { $0.id == item.id }) ?? item }, set: { updated in
-            if let i = model.items.firstIndex(where: { $0.id == item.id }) { model.items[i] = updated }
-        })
-    }
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 12) {
@@ -285,21 +282,17 @@ struct ImportView: View {
             } else {
                 HStack(spacing: 12) {
                     Metric(value: model.items.count, title: "总项目", icon: "tray.full")
-                    Metric(value: model.items.filter { $0.selected }.count, title: "已勾选", icon: "checkmark.circle")
-                    Metric(value: model.items.filter { $0.category == "09_待确认" }.count, title: "待确认", icon: "questionmark.circle")
+                    Metric(value: model.selectedCount, title: "已勾选", icon: "checkmark.circle")
+                    Metric(value: model.uncertainCount, title: "待确认", icon: "questionmark.circle")
                 }
                 HStack {
-                    TextField("搜索文件名或分类", text: $query).textFieldStyle(.roundedBorder).frame(maxWidth: 310)
                     Toggle("只看待确认", isOn: $onlyUncertain).toggleStyle(.checkbox)
                     Spacer()
-                    Button("全选") { for i in model.items.indices { model.items[i].selected = true } }
-                    Button("全不选") { for i in model.items.indices { model.items[i].selected = false } }
+                    Button("全选") { model.selectAll(true) }
+                    Button("全不选") { model.selectAll(false) }
                 }
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(visible) { item in AssetRow(item: binding(item), categories: model.availableCategories) }
-                    }
-                }.background(Palette.card, in: RoundedRectangle(cornerRadius: 12))
+                AssetTable(model: model, items: visible, categories: model.availableCategories)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 10))
             }
             HStack {
                 Text(model.mode == .move ? "移动归类 · 重复项留在来源 · 同名不同内容加序号" : "复制归类 · 保留来源 · 同名不同内容加序号").font(.caption).foregroundStyle(.secondary)
@@ -307,11 +300,59 @@ struct ImportView: View {
                 Button {
                     if model.items.isEmpty { model.scan(automatically: true) } else { model.execute() }
                 } label: {
-                    Label(model.items.isEmpty ? "一键自动归类" : "归类已选（\(model.items.filter { $0.selected }.count) 项）", systemImage: "tray.and.arrow.down")
+                    Label(model.items.isEmpty ? "一键自动归类" : "归类已选（\(model.selectedCount) 项）", systemImage: "tray.and.arrow.down")
                 }.buttonStyle(.borderedProminent).controlSize(.large)
-                    .disabled(model.source == nil || model.destination == nil || (!model.items.isEmpty && !model.items.contains { $0.selected }))
+                    .disabled(model.source == nil || model.destination == nil || (!model.items.isEmpty && model.selectedCount == 0))
             }
         }.disabled(model.busy)
+            .searchable(text: $query, prompt: "搜索素材名称或分类")
+    }
+}
+
+struct AssetTable: View {
+    @Bindable var model: HelperModel
+    let items: [OrganizeItem]
+    let categories: [String]
+    @State private var selection = Set<UUID>()
+    private func binding(_ item: OrganizeItem) -> Binding<OrganizeItem> {
+        Binding(get: { model.item(item.id) ?? item }, set: { model.updateItem($0) })
+    }
+    var body: some View {
+        Table(items, selection: $selection) {
+            TableColumn("素材") { item in
+                HStack(spacing: 9) {
+                    Toggle("包含 " + item.relative, isOn: binding(item).selected).labelsHidden()
+                    Image(systemName: item.typeInfo.icon).foregroundStyle(Palette.accent).frame(width: 22)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.relative).lineLimit(2)
+                        Text(item.typeInfo.label + (item.visualAnalysis.map { " · \($0.framesAnalyzed) 帧" } ?? ""))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(.vertical, 5)
+            }.width(min: 180, ideal: 250)
+            TableColumn("归类位置") { item in
+                Picker("\(item.relative) 的归类位置", selection: Binding(get: { model.item(item.id)?.category ?? item.category }, set: { category in
+                    var updated = model.item(item.id) ?? item
+                    updated.category = category; updated.reason = "手动选择分类"; model.updateItem(updated)
+                })) {
+                    ForEach(categories, id: \.self) { Text($0).tag($0) }
+                }.labelsHidden()
+            }.width(min: 180, ideal: 225)
+            TableColumn("判断依据") { item in
+                Text(item.reason).font(.callout).lineLimit(2).help(item.reason)
+                    .foregroundStyle(item.category == "09_待确认" ? .orange : .secondary)
+            }.width(min: 160, ideal: 250)
+        }.tableStyle(.inset(alternatesRowBackgrounds: true))
+            .contextMenu(forSelectionType: UUID.self) { ids in
+                Button("包含所选素材") { model.setSelected(ids, selected: true) }.disabled(ids.isEmpty)
+                Button("排除所选素材") { model.setSelected(ids, selected: false) }.disabled(ids.isEmpty)
+                Divider()
+                Button("在 Finder 中显示") {
+                    NSWorkspace.shared.activateFileViewerSelecting(ids.compactMap { model.item($0)?.source })
+                }.disabled(ids.isEmpty)
+            } primaryAction: { ids in
+                NSWorkspace.shared.activateFileViewerSelecting(ids.compactMap { model.item($0)?.source })
+            }
     }
 }
 
@@ -329,48 +370,27 @@ struct Metric: View {
     }
 }
 
-struct AssetRow: View {
-    @Binding var item: OrganizeItem
-    let categories: [String]
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Toggle("选择 " + item.relative, isOn: $item.selected).labelsHidden()
-                Image(systemName: item.typeInfo.icon).font(.title3).foregroundStyle(Palette.accent).frame(width: 26)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.relative).font(.callout.weight(.medium)).lineLimit(2).textSelection(.enabled)
-                    HStack(spacing: 8) {
-                        Text(item.typeInfo.label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 3).background(Palette.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 4))
-                        if let analysis = item.visualAnalysis, analysis.framesAnalyzed > 0 {
-                            Label("画面 · \(analysis.framesAnalyzed) 帧", systemImage: "eye").font(.caption2).foregroundStyle(Palette.accent)
-                        }
-                        Text(item.reason).font(.caption).foregroundStyle(item.category == "09_待确认" ? .orange : .secondary).lineLimit(2)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Picker("归类位置", selection: Binding(get: { item.category }, set: { value in
-                    item.category = value
-                    item.reason = "手动选择分类"
-                })) { ForEach(categories, id: \.self) { Text($0).tag($0) } }
-                    .labelsHidden().frame(width: 255).accessibilityLabel("\(item.source.lastPathComponent) 的归类位置")
-            }.padding(12)
-            Divider()
-        }
-    }
-}
-
 struct StatusBar: View {
     @Bindable var model: HelperModel
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            if model.busy { ProgressView().controlSize(.small) }
-            else { Image(systemName: model.finished ? "checkmark.circle.fill" : "info.circle").foregroundStyle(model.finished ? .green : Palette.accent) }
-            Text(model.status).font(.callout).lineLimit(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-            if let dest = model.destination {
-                if let report = model.reportURL { Button("查看整理记录") { NSWorkspace.shared.open(report) }.disabled(model.busy) }
-                Button("打开项目") { NSWorkspace.shared.activateFileViewerSelecting([dest]) }.disabled(model.busy)
-                if model.finished && model.tab == 0 { Button("继续归类素材") { model.tab = 1 } }
+        VStack(alignment: .leading, spacing: 9) {
+            if model.busy {
+                if let progress = model.workProgress, let total = progress.total, total > 0 {
+                    ProgressView(value: Double(progress.completed), total: Double(total)).progressViewStyle(.linear)
+                } else { ProgressView().progressViewStyle(.linear) }
             }
-        }.padding(13).frame(minHeight: 58).background(Palette.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
+            HStack(spacing: 12) {
+                Image(systemName: model.hasError ? "exclamationmark.triangle.fill" : model.finished ? "checkmark.circle.fill" : "info.circle")
+                    .foregroundStyle(model.hasError ? .red : model.finished ? .green : Palette.accent)
+                Text(model.status).font(.callout).lineLimit(3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                if model.busy {
+                    Button(model.stopping ? "正在停止…" : "停止", action: model.cancel).disabled(model.stopping).keyboardShortcut(.cancelAction)
+                } else if let dest = model.destination {
+                    if let report = model.reportURL { Button("查看整理记录") { NSWorkspace.shared.open(report) } }
+                    Button("打开项目") { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
+                }
+            }
+        }.padding(13).frame(minHeight: 64).background(Palette.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 11))
     }
 }
 
@@ -404,13 +424,24 @@ struct RulesView: View {
 }
 
 @main struct FrameNest: App {
+    @State private var model = HelperModel()
     init() {
         if CommandLine.arguments.contains("--self-test") {
             do { try runSelfTests(); exit(0) } catch { fputs("FAIL: \(error)\n", stderr); exit(1) }
         }
     }
     var body: some Scene {
-        WindowGroup("FrameNest") { ContentView() }.defaultSize(width: 1180, height: 860)
-            .commands { CommandGroup(replacing: .newItem) {} }
+        Window("FrameNest", id: "main") { ContentView(model: model) }.defaultSize(width: 1120, height: 820)
+            .windowToolbarStyle(.unified)
+            .commands {
+                CommandGroup(replacing: .newItem) {
+                    Button("新建项目") { model.tab = 0 }.keyboardShortcut("n").disabled(model.busy)
+                }
+                CommandMenu("工作区") {
+                    Button("新建项目") { model.tab = 0 }.keyboardShortcut("1")
+                    Button("素材归类") { model.tab = 1 }.keyboardShortcut("2")
+                    Button("分类规则") { model.tab = 2 }.keyboardShortcut("3")
+                }
+            }
     }
 }

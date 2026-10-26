@@ -1,7 +1,7 @@
 import FrameNestCore
 import Foundation
 
-func runSelfTests() throws {
+@MainActor func runSelfTests() throws {
     let fm = FileManager.default
     let base = fm.temporaryDirectory.appendingPathComponent("framenest-check-" + UUID().uuidString)
     try fm.createDirectory(at: base, withIntermediateDirectories: false)
@@ -133,5 +133,6 @@ func runSelfTests() throws {
     try check(unsafeMove.failed == 1 && fm.fileExists(atPath: incoming.path), "拒绝移动到来源自身且保留文件")
     try check((try String(contentsOf: moved.reportURL, encoding: .utf8)).contains("已移动"), "移动结果写入 Markdown 记录")
     try runVisualSelfTests(base: base, check: check)
+    try runPerformanceSelfTests(base: base, check: check)
     print("ALL \(checks) CHECKS PASSED")
 }
