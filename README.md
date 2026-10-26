@@ -10,9 +10,9 @@
 
 [English ↓](#english) · [下载 / Downloads](https://github.com/weixunkkkkk/framenest/releases) · [MIT License](LICENSE)
 
-![FrameNest 一键归类实际界面](docs/screenshots/organize-1.5.png)
+![FrameNest 一键归类实际界面](docs/screenshots/organize-1.6.jpg)
 
-[新建项目页](docs/screenshots/new-project-1.5.png) · [分类规则页](docs/screenshots/rules-1.5.png)
+[新建项目页](docs/screenshots/new-project-1.6.jpg) · [分类规则页](docs/screenshots/rules-1.6.jpg)
 
 ## 1.6 更新
 

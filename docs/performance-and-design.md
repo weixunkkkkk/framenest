@@ -46,7 +46,7 @@
 python3 Scripts/benchmark_mcp.py --binary /path/to/FrameNestMCP --fixtures /path/to/fixtures --trials 3 --output /path/to/results.json
 ```
 
-2026-10-26：Mac 处于锁屏，尚未完成真实窗口、缩放与视觉检查。1.6 已在本机安装，安装后的 MCP 实际识别通过；草稿 PR 保留此待验收项，未据此发布稳定版。源码构建和逻辑检查不等于人工视觉验收。
+2026-10-26：解锁后完成实际窗口检查，验证三个工作区、工具栏、原生表格、勾选计数、搜索、手动分类、窗口放大和缩小，以及 Esc 停止。150 份副本停止扫描后内容完整；9 项实际移动归类成功，失败 0 项，文件哈希一致。未单独进行深色外观验收。
 
 ## English
 
@@ -54,4 +54,4 @@ Version 1.6 batches video sampling, reuses Vision requests, avoids OCR where it 
 
 Three real MCP trials per version used the same nine controlled image/video fixtures on a 16 GB Apple Silicon Mac. Median uncached analysis fell from 6.2649s to 2.0436s. Sampled peak service RSS fell from 289.6 MB to 177.4 MB. All classification results matched. These are service measurements on short fixtures, not guarantees for arbitrary footage or the entire GUI.
 
-The GUI adopts native sidebar navigation, toolbar actions, search and tables, with consistent progress and cancellation, following the Apple HIG links above. Core checks passed 134 cases; MCP checks passed 57 cases. The Mac was locked during this run, so actual window interaction, resizing, and visual acceptance remain pending. The installed MCP binary passed actual analysis. The PR remains a draft pending visual checks.
+The GUI adopts native sidebar navigation, toolbar actions, search and tables, with consistent progress and cancellation, following the Apple HIG links above. Core checks passed 134 cases; MCP checks passed 57 cases. After the Mac was unlocked, actual navigation, toolbar/table interaction, selection counts, search, category editing, window resizing, and cancellation were checked. Stopping a 150-item scan preserved every source. A nine-item GUI move completed with zero failures and matching hashes. Dark appearance was not separately inspected.
