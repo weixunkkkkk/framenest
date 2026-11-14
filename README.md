@@ -37,7 +37,7 @@
 
 1. 从 [Releases](https://github.com/weixunkkkkk/framenest/releases) 下载 `FrameNest-…-macOS-arm64.zip`。
 2. 解压后将 `FrameNest.app` 放入“应用程序”。
-3. 在“新建项目”中输入项目名，选择保存位置，点击“创建项目文件夹”。
+3. 在“新建项目”中输入项目名，点击“创建项目文件夹”。点“更改默认…”可保存常用位置，重开软件后也会沿用；点“本次另选…”可为这个项目单独选目录。
 4. 创建后自动进入“素材归类”；点击“打开素材文件夹”，把视频、图片和其他素材放入“00_待归类”。也可以将外部素材文件夹拖进窗口上方的导入区域。
 5. 选择“移动素材”或“复制素材”，点击“一键自动归类”。默认移动；用途不明确的文件进入“09_待确认”。需要调整时，可先“扫描并预览”，修改后点击“归类已选”。
 6. 完成后打开项目或查看 Markdown 整理记录。移动模式下，重复项仍保留在来源。
@@ -162,7 +162,7 @@ Download the ZIP from [Releases](https://github.com/weixunkkkkk/framenest/releas
 
 ### Typical workflow
 
-1. Open the first sidebar page, enter a project name, choose a location, and create the project folders.
+1. Open the first sidebar page, enter a project name, and create the project folders. Use “更改默认…” to change the saved location for future projects or “本次另选…” to choose a location for this project only.
 2. The media page opens automatically with the new project inbox selected. Put your files in `00_待归类`, or drag an external source folder into the import area.
 3. Choose move (GUI default) or copy, then click the one-click organization button. Ambiguous items go to `09_待确认`. Optionally scan first, review the plan, and organize the selected items.
 4. Open the project or its Markdown operation report. Duplicate items remain in the source even in move mode.

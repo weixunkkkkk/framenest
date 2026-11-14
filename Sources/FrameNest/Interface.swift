@@ -116,16 +116,16 @@ struct Sidebar: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("本地画面识别", systemImage: "eye")
                 Label("移动 / 复制可选", systemImage: "folder.badge.gearshape")
-                Text("1.6.0 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
+                Text("1.6.1 · 开源视频项目助手").font(.caption2).foregroundStyle(.tertiary)
             }.font(.caption).foregroundStyle(.secondary).padding(16)
         }
     }
 }
 
-struct PathPicker: View {
+struct PathPicker<Actions: View>: View {
     let title: String
     let url: URL?
-    let action: () -> Void
+    @ViewBuilder let actions: () -> Actions
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "folder.fill").font(.title3).foregroundStyle(Palette.accent)
@@ -133,8 +133,7 @@ struct PathPicker: View {
                 Text(title).font(.caption).foregroundStyle(.secondary)
                 Text(url.map { $0.path.replacingOccurrences(of: NSHomeDirectory(), with: "~", options: [.anchored]) } ?? "点击右侧选择文件夹").font(.callout).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }.frame(maxWidth: .infinity, alignment: .leading)
-            Button("选择…", action: action)
-                .accessibilityLabel("选择" + title)
+            actions()
         }.padding(12).background(Palette.accent.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -151,7 +150,14 @@ struct NewProjectView: View {
                 }
                 Text(model.projectName.isEmpty ? "文件夹名预览：产品名_制作阶段_日期" : "文件夹名预览：" + model.projectName)
                     .font(.caption).foregroundStyle(.secondary)
-                PathPicker(title: "保存位置", url: model.parent) { model.pick(0) }
+                PathPicker(title: model.usesDefaultProjectParent ? "默认保存位置" : "本次保存位置", url: model.parent) {
+                    if !model.usesDefaultProjectParent {
+                        Button("使用默认", action: model.useDefaultProjectParent).help(model.defaultProjectParent.path)
+                    }
+                    Button("本次另选…") { model.pick(0) }
+                    Button("更改默认…", action: model.changeDefaultProjectParent)
+                        .help("以后新建项目时自动使用这个文件夹")
+                }
             }
             Panel(title: "2. 项目目录预览", subtitle: "文稿、实拍、实测、工程和交付各有位置。") {
                 HStack {
@@ -253,9 +259,13 @@ struct ImportView: View {
                     return model.useSource(urls[0])
                 } isTargeted: { dropTarget = $0 }
             HStack(spacing: 12) {
-                PathPicker(title: "素材来源", url: model.source) { model.pick(1) }
+                PathPicker(title: "素材来源", url: model.source) {
+                    Button("选择…") { model.pick(1) }.accessibilityLabel("选择素材来源")
+                }
                 Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                PathPicker(title: "目标项目", url: model.destination) { model.pick(2) }
+                PathPicker(title: "目标项目", url: model.destination) {
+                    Button("选择…") { model.pick(2) }.accessibilityLabel("选择目标项目")
+                }
             }
             HStack {
                 Button { model.scan() } label: { Label("扫描并预览", systemImage: "magnifyingglass") }
