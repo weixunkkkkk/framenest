@@ -36,7 +36,7 @@ final class MCPServer {
     var protocolVersion = versions[0]
     var plans: [String: OrganizationPlan] = [:]
     let fm = FileManager.default
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.1"
 
     static func json(_ object: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
@@ -376,7 +376,7 @@ final class MCPServer {
 }
 
 if CommandLine.arguments.contains("--version") {
-    print("FrameNestMCP 1.6.0")
+    print("FrameNestMCP 1.6.1")
 } else {
     MCPServer().run()
 }

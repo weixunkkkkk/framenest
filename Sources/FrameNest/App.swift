@@ -4,9 +4,12 @@ import AppKit
 import Observation
 
 @Observable @MainActor final class HelperModel {
+    private static let projectParentPreferenceKey = "defaultProjectParentPath"
+
     var name = ""
     var addDate = true
-    var parent = HelperModel.defaultParent()
+    private(set) var parent: URL
+    private(set) var defaultProjectParent: URL
     var source: URL?
     var destination: URL?
     var mode: OrganizationMode = .move
@@ -26,6 +29,18 @@ import Observation
     var tab = 0
     var finished = false
     var operation = UUID()
+
+    init() {
+        let initialParent: URL
+        if let path = UserDefaults.standard.string(forKey: Self.projectParentPreferenceKey), path.hasPrefix("/") {
+            initialParent = URL(fileURLWithPath: path, isDirectory: true)
+        } else {
+            initialParent = Self.suggestedProjectParent()
+        }
+        parent = initialParent
+        defaultProjectParent = initialParent
+    }
+
     func replaceItems(_ values: [OrganizeItem]) {
         items = values
         itemIndices = Dictionary(uniqueKeysWithValues: values.enumerated().map { ($0.element.id, $0.offset) })
@@ -66,7 +81,7 @@ import Observation
         return worker
     }
     private func finishOperation() { operation = UUID(); busy = false; control = nil; workProgress = nil; stopping = false }
-    static func defaultParent() -> URL {
+    private static func suggestedProjectParent() -> URL {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let candidates = [home.appendingPathComponent("Documents/video"), home.appendingPathComponent("Movies"), home.appendingPathComponent("Documents"), home]
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) } ?? home
@@ -85,22 +100,37 @@ import Observation
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd"
         return n.isEmpty ? "" : n + (addDate ? "_" + f.string(from: Date()) : "")
     }
-    func pick(_ kind: Int) {
+    var usesDefaultProjectParent: Bool { parent.path == defaultProjectParent.path }
+
+    func useDefaultProjectParent() { parent = defaultProjectParent }
+
+    func changeDefaultProjectParent() {
+        guard let folder = chooseFolder(message: "以后新建项目时，默认保存到这个文件夹。", prompt: "设为默认") else { return }
+        UserDefaults.standard.set(folder.path, forKey: Self.projectParentPreferenceKey)
+        defaultProjectParent = folder
+        useDefaultProjectParent()
+    }
+
+    private func chooseFolder(message: String, prompt: String = "选择文件夹") -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false
         panel.allowsMultipleSelection = false; panel.canCreateDirectories = true
-        panel.prompt = "选择文件夹"
-        panel.message = kind == 0 ? "新项目保存在哪里？" : kind == 1 ? "选择要归类的素材文件夹" : "选择接收素材的项目文件夹"
-        panel.directoryURL = parent
-        if panel.runModal() == .OK, let url = panel.url {
-            switch kind {
-            case 0: parent = url
-            case 1: _ = useSource(url)
-            default:
-                destination = url; replaceItems([]); reportURL = nil; finished = false
-                let inbox = url.appendingPathComponent(Organizer.inboxFolder)
-                if source == nil && FileManager.default.fileExists(atPath: inbox.path) { source = inbox }
-            }
+        panel.prompt = prompt
+        panel.message = message
+        panel.directoryURL = (try? parent.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? parent : Self.suggestedProjectParent()
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    func pick(_ kind: Int) {
+        let message = kind == 0 ? "选择这个项目的保存位置。" : kind == 1 ? "选择要归类的素材文件夹" : "选择接收素材的项目文件夹"
+        guard let url = chooseFolder(message: message) else { return }
+        switch kind {
+        case 0: parent = url
+        case 1: _ = useSource(url)
+        default:
+            destination = url; replaceItems([]); reportURL = nil; finished = false
+            let inbox = url.appendingPathComponent(Organizer.inboxFolder)
+            if source == nil && FileManager.default.fileExists(atPath: inbox.path) { source = inbox }
         }
     }
     @discardableResult func useSource(_ url: URL) -> Bool {
@@ -120,7 +150,9 @@ import Observation
             reportURL = nil
             status = "项目已创建：\(destination!.lastPathComponent)\n把素材放入「00_待归类」，或拖入素材文件夹，再点“一键自动归类”。"
             UserDefaults.standard.set(template, forKey: "folderTemplate")
+            useDefaultProjectParent()
             finished = true
+            hasError = false
             tab = 1
         } catch { status = error.localizedDescription; hasError = true; finished = false }
     }
